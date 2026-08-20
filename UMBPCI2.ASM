@@ -23,18 +23,23 @@
 ;    tasm umbpci /dEnglVersion umbpci2.obj [| more]*   (English Version)  or
 ;    tasm umbpci /dPTBR umbpci2.obj [| more]*          (Pt-BR Version)
 ;
+; Link with:
 ;    tlink /t umbpci.obj, umbpci.sys /3
 ;
-;    * Note: | more is optional, to pause errors messages.
+; * Note: | more is optional, to pause errors messages.
 ;------------------------------------------------------------------------------
 
-;EnglVersion    equ 1      
-;DebugVersion   equ 1
-;DebugVersion2  equ 1
-;P2DebugVersion equ 1
-;K7DebugVersion equ 1
-;TestStack      equ 1
-;PTBR           equ 1
+
+;------------------------------------------------------------------------------
+; Compilation Modifiers
+;------------------------------------------------------------------------------
+;EnglVersion     equ 1             ; Driver compiled in English
+;DebugVersion    equ 1
+;DebugVersion2   equ 1
+;P2DebugVersion  equ 1
+;K7DebugVersion  equ 1
+;TestStack       equ 1
+;PTBR            equ 1             ; Driver compilado em Portugues do Brasil
 
 
 ;==============================================================================
@@ -44,9 +49,7 @@
     .CODE
 ;    .486p
     .586p                          ; Requires Borland TAsm 4.x
-    JUMPS                          ; (Ninho)
-
-    org   0                        ; .SYS file
+    JUMPS                          ; Automatic SHORT/NEAR conditional jumps (Ninho)
 
 
 ;==============================================================================
@@ -60,18 +63,21 @@ DATE_STRING          equ '04/1996-05/2025'
 ;rdmsr                equ db 0Fh, 032h
 ;wrmsr                equ db 0Fh, 030h
 
-INTEL_ID              equ 8086h
-VIA_ID                equ 1106h
-SIS_ID                equ 1039h
-ALI_ID                equ 10B9h
-AMD_ID                equ 1022h
-OPTI_ID               equ 1045h
-UMC_ID                equ 1060h
-NV_ID                 equ 10DEh
-SIO_ID                equ 0484h      ; SIO
-PIIX2_ID              equ 122Eh      ; PIIX, Funktion 0
-PIIX3_ID              equ 7000h      ; PIIX3, Funktion 0
-PIIX4_ID              equ 7110h      ; PIIX4, Funktion 0
+;------------------------------------------------------------------------------
+; Vendors IDs Used on Code
+;------------------------------------------------------------------------------
+INTEL_ID             equ 8086h
+VIA_ID               equ 1106h
+SIS_ID               equ 1039h
+ALI_ID               equ 10B9h
+AMD_ID               equ 1022h
+OPTI_ID              equ 1045h
+UMC_ID               equ 1060h
+NV_ID                equ 10DEh
+SIO_ID               equ 0484h     ; SIO
+PIIX2_ID             equ 122Eh     ; PIIX, Function 0
+PIIX3_ID             equ 7000h     ; PIIX3, Function 0
+PIIX4_ID             equ 7110h     ; PIIX4, Function 0
 
 
 ;==============================================================================
@@ -101,8 +107,10 @@ UMB_Entry ENDS
 
 
 ;==============================================================================
-; Resident Variables
+; Start of Device Driver (192 bytes at total)
 ;==============================================================================
+
+   org   0                        ; .SYS file Header stay on offset 0
 
 ;------------------------------------------------------------------------------
 ; Device Driver Header (Must be at offset 0)
@@ -115,13 +123,13 @@ Driver_Name          db 'UMBPCIXX'       ; Name (or units)
 
 
 ;------------------------------------------------------------------------------
-; List of UMBs Addresses Found
+; List of UMBs Addresses Found and Available
 ;------------------------------------------------------------------------------
 UMBs_List            dw 22 dup(0)        ; Maximum of 10 entries (UMBs)
 
 
 ;------------------------------------------------------------------------------
-; HIMEM.SYS Chain
+; Original HIMEM.SYS Chain (Changed on loading to support the UMBPCI)
 ;------------------------------------------------------------------------------
 XMS_Orginal_Jmp      dd ?                ; HIMEM original value
 
@@ -143,40 +151,41 @@ UMB_Request PROC NEAR
     pop   ds                       ; DS = code segment
 
     mov   si,OFFSET UMBs_List
-    xor   cx,cx                    ; for size comparison
-    cld                            ; ascending direction
+    xor   cx,cx                    ; For size comparison
+    cld                            ; Ascending direction for move address blocks
 
+; Search for an UMB free
 UMB_Search:
-    lodsw                          ; one entry from UMB list
-    or    ax,ax                    ; End of list?
-    jz    UMB_End                  ; -> yes, not found
+    lodsw                          ; Gets one entry from UMB list
+    or    ax,ax                    ; End of UMBs available list?
+    jz    UMB_End                  ; -> Yes, not has more UMBs
     mov   bx,ax                    ; hold start segment
     lodsw
-    cmp   bx,-1                    ; already occupied?
-    jz    UMB_Search               ; -> yes, next entry
+    cmp   bx,-1                    ; Already occupied?
+    jz    UMB_Search               ; -> Yes, let's check the next entry
     cmp   ax,cx                    ; largest block so far?
     jb    Check_Size
-    mov   cx,ax                    ; yes, hold size
+    mov   cx,ax                    ; Yes, hold size
 
 Check_Size:
-    cmp   ax,dx                    ; size sufficient?
-    jb    UMB_Search               ; -> no, next block
+    cmp   ax,dx                    ; Size is enough?
+    jb    UMB_Search               ; -> No, then go to the next block
 
-UMB_Found:
-    mov   WORD PTR [si - 4],-1     ; mark block as allocated
-    mov   dx,ax                    ; size in DX, segment in BX
-    pop   ax                       ; old BX from stack
-    mov   ax,1                     ; signal success
+Free_UMB_Found:
+    mov   WORD PTR [si - 4],-1     ; Marks the block as allocated
+    mov   dx,ax                    ; Size in DX, segment in BX
+    pop   ax                       ; Old BX from stack
+    mov   ax,1                     ; Signals success
     jmp   SHORT UMB_Done
 
 UMB_End:
     xor   ax,ax
-    pop   bx                       ; original BX (BH)
-    mov   bl,0B0h                  ; assumption: block only too small
-    mov   dx,cx                    ; block size to return
-    or    dx,dx                    ; anything found?
-    jnz   UMB_Done                 ; -> yes, only too small
-    inc   bl                       ; nothing found at all: BL = $B1
+    pop   bx                       ; Original BX (BH)
+    mov   bl,0B0h                  ; Assumption: the UMB only too small
+    mov   dx,cx                    ; Block size to return
+    or    dx,dx                    ; Anything found?
+    jnz   UMB_Done                 ; -> Yes, only too small
+    inc   bl                       ; Nothing found at all: BL = $B1
 
 UMB_Done:
     pop   cx
@@ -194,16 +203,16 @@ UMB_Request ENDP
 
 New_Chain:
     jmp   SHORT New_Ctrl
-    nop                            ; at this location the next
+    nop                            ; At this location the next
     nop                            ; handler would insert its jump
     nop
 
 New_Ctrl:
     pushf
     cmp   ah,10h                   ; UMB request?
-    jz    UMB_Request              ; flags on stack!
+    jz    UMB_Request              ; Flags on stack!
     popf
-    jmp   [XMS_Orginal_Jmp]        ; otherwise pass on
+    jmp   [XMS_Orginal_Jmp]        ; Otherwise goes to original XMS handler
 
 ifdef TestStack
   db  ('FSTACK7890ABCDEF')
@@ -224,7 +233,7 @@ ifdef TestStack
   Loc_Stack  db  0
 endif
 
-END_RESIDENT LABEL BYTE            ; *** The Resident Part Ends Here ***
+END_RESIDENT LABEL BYTE    ; *** The Resident Part (192 bytes) Ends Here ***
 
 
 ;==============================================================================
@@ -1032,7 +1041,7 @@ elseifdef PTBR
 		   db 'Este computador n„o tem um chipset PCI!$'
   SetErr$          db 'Um erro ocorreu ao tentar programar o chipset PCI!$'
   SkipK7Msg$       db 'A detec‡„o de AMD K7 ser  ignorada!',13,10,'$' ; (Ninho)
-  PressKey$        db 'Pressione uma tecla para continuar...', 0Dh, 0Ah, '$'
+  PressKey$        db 0Dh, 0Ah, 'Pressione uma tecla para continuar...', 0Dh, 0Ah, '$'
   Unsupp2$         db 'This chipset isn''t supported because its vendor doesn''t offer the needed information about it',13,10,'$'
   Unsupp3$         db 'This chipset isn''t supported because it has no Shadow RAM',13,10,'$'
   Unsupp4$         db 'The configuration mechanism of this chipset isn''t supported.',13,10,'$'
@@ -1313,7 +1322,7 @@ TestClass           dw 0601h, 0602h, 0000h, 0101h
 MaxDev              dw 0020h, 0020h, 0002h, 0020h
 TCIdx               dw 0000h
 
-@PrintDeviceIDs:
+@Print_Device_IDs:
     ;erstmal sehen, ob ein PCI-BIOS da ist
     mov   ax,0B101h
     int   1Ah
@@ -1885,29 +1894,29 @@ ID_List:
     db 'Intel Core 7th Gen$  '
 
 ;------------------------------- Xeon E3-1200 ---------------------------------
-    dw INTEL_ID, 3e10h, 0000h , OFFSET IntelCore7thGenList, 1, 0
+    dw INTEL_ID, 3e10h, 0000h, OFFSET IntelCore7thGenList, 1, 0
     db 'Intel Core 8th Gen$  '
  
-    dw INTEL_ID, 3e18h, 0000h , OFFSET IntelCore7thGenList, 1, 0
+    dw INTEL_ID, 3e18h, 0000h, OFFSET IntelCore7thGenList, 1, 0
     db 'Intel Core 8th Gen$  '
  
-    dw INTEL_ID, 3e1fh, 0000h , OFFSET IntelCore7thGenList, 1, 0
+    dw INTEL_ID, 3e1fh, 0000h, OFFSET IntelCore7thGenList, 1, 0
     db 'Intel Core 8th Gen$  '
  
-    dw INTEL_ID, 3e30h, 0000h , OFFSET IntelCore7thGenList, 1, 0
+    dw INTEL_ID, 3e30h, 0000h, OFFSET IntelCore7thGenList, 1, 0
     db 'Intel Core 8th Gen$  '
  
-    dw INTEL_ID, 3e33h, 0000h , OFFSET IntelCore7thGenList, 1, 0
+    dw INTEL_ID, 3e33h, 0000h, OFFSET IntelCore7thGenList, 1, 0
     db 'Intel Core 8th Gen$  '
  
-    dw INTEL_ID, 3e34h, 0000h , OFFSET IntelCore7thGenList, 1, 0
+    dw INTEL_ID, 3e34h, 0000h, OFFSET IntelCore7thGenList, 1, 0
     db 'Intel Core 8th Gen$  '
 
 ;------------------------------- Core 8/9th Gen -------------------------------
-    dw INTEL_ID, 3ec2h, 0000h , OFFSET IntelCore7thGenList, 1, 0
+    dw INTEL_ID, 3ec2h, 0000h, OFFSET IntelCore7thGenList, 1, 0
     db 'Intel Core 8th Gen$  '
  
-    dw INTEL_ID, 3ec4h, 0000h , OFFSET IntelCore7thGenList, 1, 0
+    dw INTEL_ID, 3ec4h, 0000h, OFFSET IntelCore7thGenList, 1, 0
     db 'Intel Core 8th Gen$  '
  
     dw INTEL_ID, 3ec6h, 0000h , OFFSET IntelCore7thGenList, 1, 0
@@ -1921,40 +1930,40 @@ ID_List:
 
 ;------------------------------- Core 10th Gen --------------------------------
     ;Y Processor 2 Cores 0x8A00h
-    dw INTEL_ID, 8A00h, 0000h , OFFSET IntelCore7thGenList, 1, UNSUPPORTED_UNTESTED
+    dw INTEL_ID, 8A00h, 0000h, OFFSET IntelCore7thGenList, 1, UNSUPPORTED_UNTESTED
     db 'Intel Core 10th Gen$ '
  
     ;U Processor 2 Cores 0x8A02h
-    dw INTEL_ID, 8A02h, 0000h , OFFSET IntelCore7thGenList, 1, UNSUPPORTED_UNTESTED
+    dw INTEL_ID, 8A02h, 0000h, OFFSET IntelCore7thGenList, 1, UNSUPPORTED_UNTESTED
     db 'Intel Core 10th Gen$ '
  
     ;Y Processor 4 Cores 0x8A10h
-    dw INTEL_ID, 8A10h, 0000h , OFFSET IntelCore7thGenList, 1, UNSUPPORTED_UNTESTED
+    dw INTEL_ID, 8A10h, 0000h, OFFSET IntelCore7thGenList, 1, UNSUPPORTED_UNTESTED
     db 'Intel Core 10th Gen$ '
  
     ;U Processor 4 Cores 0x8A12h
-    dw INTEL_ID, 8A12h, 0000h , OFFSET IntelCore7thGenList, 1, UNSUPPORTED_UNTESTED
+    dw INTEL_ID, 8A12h, 0000h, OFFSET IntelCore7thGenList, 1, UNSUPPORTED_UNTESTED
     db 'Intel Core 10th Gen$ '
  
-    dw INTEL_ID, 9B53h, 0000h , OFFSET IntelCore7thGenList, 1, UNSUPPORTED_UNTESTED
+    dw INTEL_ID, 9B53h, 0000h, OFFSET IntelCore7thGenList, 1, UNSUPPORTED_UNTESTED
     db 'Intel Core 10th Gen$ '
 
 ;------------------------------- Core 11th Gen --------------------------------
     ;11th Generation Intel® Core™ Processor 8 Core 4C43h
-    dw INTEL_ID, 4C43h, 0000h , OFFSET IntelCore7thGenList, 1, UNSUPPORTED_UNTESTED
+    dw INTEL_ID, 4C43h, 0000h, OFFSET IntelCore7thGenList, 1, UNSUPPORTED_UNTESTED
     db 'Intel Core 11th Gen$ '
  
     ;11th Generation Intel® Core™ Processor 6 Core 4C53h
-    dw INTEL_ID, 4C53h, 0000h , OFFSET IntelCore7thGenList, 1, UNSUPPORTED_UNTESTED
+    dw INTEL_ID, 4C53h, 0000h, OFFSET IntelCore7thGenList, 1, UNSUPPORTED_UNTESTED
     db 'Intel Core 11th Gen$ '
 
 ;------------------------------- Core 12th Gen --------------------------------
     ;S LGA 8+8
-    dw INTEL_ID, 4660h, 0000h , OFFSET IntelCore7thGenList, 1, UNSUPPORTED_UNTESTED
+    dw INTEL_ID, 4660h, 0000h, OFFSET IntelCore7thGenList, 1, UNSUPPORTED_UNTESTED
     db 'Intel Core 12th Gen$ '
  
     ;S LGA 8+4
-    dw INTEL_ID, 4668h, 0000h , OFFSET IntelCore7thGenList, 1, UNSUPPORTED_UNTESTED
+    dw INTEL_ID, 4668h, 0000h, OFFSET IntelCore7thGenList, 1, UNSUPPORTED_UNTESTED
     db 'Intel Core 12th Gen$ '
  
     ;S LGA 6+4 
@@ -1967,13 +1976,13 @@ ID_List:
 
 ; already as 'Intel Core 3rd Gen'
     ;dw INTEL_ID, 0150h, 0000h, OFFSET IntelCore2ndGenList, 1, 0
-    ;db 'Intel XEON E3 1200v2$'
+    ;db 'Intel XEON E3-1200v2$'
 
     dw INTEL_ID, 0C08h, 0000h, OFFSET IntelCore2ndGenList, 1, 0
-    db 'Intel XEON E3 1200v3$'
+    db 'Intel XEON E3-1200v3$'
 
     dw INTEL_ID, 000Bh, 0000h, OFFSET IntelCore2ndGenList, 1, 0
-    db 'Intel XEON E3 1200v4$'
+    db 'Intel XEON E3-1200v4$'
 
     dw INTEL_ID, 3C00h, 0000h, OFFSET No_List, 1, UNSUPPORTED_NO_SHADOW_RAM
     db 'Intel XEON E5$       '
@@ -1994,49 +2003,61 @@ ID_List:
 ;Intel845_List
 
 ;-------------------------- Intel Core Chipsets -------------------------
-    ;dw INTEL_ID, 3B02h, 0000h , OFFSET No_List, 1, UnsuppCoreCpu
-    ;db 'Intel P55$           ' 
+;    dw INTEL_ID, 3B02h, 0000h, OFFSET No_List, 1, UnsuppCoreCpu
+;    db 'Intel P55$           ' 
 ;
-; dw INTEL_ID, 3B03h, 0000h , OFFSET No_List, 1, UnsuppCoreCpu
-; db 'Intel PM55$          ' 
+;    dw INTEL_ID, 3B03h, 0000h, OFFSET No_List, 1, UnsuppCoreCpu
+;    db 'Intel PM55$          ' 
 ;
-; dw INTEL_ID, 3B06h, 0000h , OFFSET No_List, 1, UnsuppCoreCpu
-; db 'Intel H55$           ' 
+;    dw INTEL_ID, 3B06h, 0000h , OFFSET No_List, 1, UnsuppCoreCpu
+;    db 'Intel H55$           ' 
 ;
-; dw INTEL_ID, 3B07, 0000h , OFFSET No_List, 1, UnsuppCoreCpu
-; db 'Intel QM57$          ' 
+;    dw INTEL_ID, 3B07h, 0000h, OFFSET No_List, 1, UnsuppCoreCpu
+;    db 'Intel QM57$          ' 
 ;
-; dw INTEL_ID, 3B08, 0000h , OFFSET No_List, 1, UnsuppCoreCpu
-; db 'Intel H57$           ' 
+;    dw INTEL_ID, 3B08h, 0000h, OFFSET No_List, 1, UnsuppCoreCpu
+;    db 'Intel H57$           ' 
 ;
-; dw INTEL_ID, 3B09, 0000h , OFFSET No_List, 1, UnsuppCoreCpu
-; db 'Intel HM55$          ' 
+;    dw INTEL_ID, 3B09h, 0000h, OFFSET No_List, 1, UnsuppCoreCpu
+;    db 'Intel HM55$          ' 
 ;
-; dw INTEL_ID, 3B0A, 0000h , OFFSET No_List, 1, UnsuppCoreCpu
-; db 'Intel Q57$           ' 
+;    dw INTEL_ID, 3B0Ah, 0000h, OFFSET No_List, 1, UnsuppCoreCpu
+;    db 'Intel Q57$           ' 
 ;
-; dw INTEL_ID, 3B0B, 0000h , OFFSET No_List, 1, UnsuppCoreCpu
-; db 'Intel HM57$          ' 
+;    dw INTEL_ID, 3B0B, 0000h , OFFSET No_List, 1, UnsuppCoreCpu
+;    db 'Intel HM57$          ' 
 ;
-; dw INTEL_ID, 3B0F, 0000h , OFFSET No_List, 1, UnsuppCoreCpu
-; db 'Intel QS57$          ' 
+;    dw INTEL_ID, 3B0Fh, 0000h, OFFSET No_List, 1, UnsuppCoreCpu
+;    db 'Intel QS57$          ' 
 ;
-; dw INTEL_ID, 3B12, 0000h , OFFSET No_List, 1, UnsuppCoreCpu
-; db 'Intel 3400$          ' 
+;    dw INTEL_ID, 3B12h, 0000h, OFFSET No_List, 1, UnsuppCoreCpu
+;    db 'Intel 3400$          ' 
 ;
-; dw INTEL_ID, 3B14, 0000h , OFFSET No_List, 1, UnsuppCoreCpu
-; db 'Intel 3420$          ' 
+;    dw INTEL_ID, 3B14h, 0000h, OFFSET No_List, 1, UnsuppCoreCpu
+;    db 'Intel 3420$          ' 
 ;
-; dw INTEL_ID, 3B16, 0000h , OFFSET No_List, 1, UnsuppCoreCpu
-; db 'Intel 3450$          ' 
+;    dw INTEL_ID, 3B16h, 0000h, OFFSET No_List, 1, UnsuppCoreCpu
+;    db 'Intel 3450$          ' 
 ;
 
 
 ;------------------------------ Intel Atom  ----------------------------
-    dw INTEL_ID, 8100, 0000h, OFFSET Intel_Atom_List, 1, UNSUPPORTED_UNTESTED
+    dw INTEL_ID, 0F00h, 0000h, OFFSET Intel845_List, 1, 0
+    db 'Intel Atom Z36/Z37xx$' 
+
+    dw INTEL_ID, 22C8h, 0000h, OFFSET No_List, 1, UNSUPPORTED_NO_HOST_BRIDGE
+    db 'Intel Pentium Nxxxx$ '
+
+    dw INTEL_ID, 4114h, 0000h, OFFSET Intel845_List, 1, UNSUPPORTED_UNTESTED
+    db 'Intel Atom E6xx$     ' 
+
+    dw INTEL_ID, 4114h, 0000h, OFFSET Intel845_List, 1, UNSUPPORTED_UNTESTED
+    db 'Intel Atom E6xx$     ' 
+
+    dw INTEL_ID, 8100h, 0000h, OFFSET Intel_Atom_List, 1, UNSUPPORTED_UNTESTED
     db 'Intel US15W/X$       ' 
 
-    dw INTEL_ID, 8101, 0000h, OFFSET Intel_Atom_List, 1, UNSUPPORTED_UNTESTED
+    dw INTEL_ID, 8101h, 0000h, OFFSET Intel_Atom_List, 1, UNSUPPORTED_UNTESTED
     db 'Intel US11L/15L$     ' 
 
     dw INTEL_ID, 0A000h, 0000h, OFFSET Intel845_List, 1, 0
@@ -2044,19 +2065,6 @@ ID_List:
 
     dw INTEL_ID, 0A010h, 0000h, OFFSET Intel845_List, 1, 0
     db 'Intel Atom N4xx$     ' 
-
-    dw INTEL_ID, 4114h, 0000h, OFFSET Intel845_List, 1, UNSUPPORTED_UNTESTED
-    db 'Intel Atom E6xx$     ' 
-
-    dw INTEL_ID, 4114h, 0000h, OFFSET Intel845_List, 1, UNSUPPORTED_UNTESTED
-    db 'Intel Atom E6xx$     ' 
-
-    dw INTEL_ID, 22C8h, 0000h, OFFSET No_List, 1, UNSUPPORTED_NO_HOST_BRIDGE
-    db 'Intel Pentium Nxxxx$ '
-
-    dw INTEL_ID, 0F00h, 0000h, OFFSET Intel845_List, 1, 0
-    db 'Intel Atom Z36/37xxx$' 
-
 
 ;------------------------------- Intel Server ---------------------------------
     dw INTEL_ID, 2540h, 0000h, OFFSET Intel_Uni_List, 1, 0
@@ -2118,6 +2126,9 @@ ID_List:
 
 
 ;------------------------------- Intel Alt ------------------------------------
+    dw INTEL_ID, 0486h, 0000h, OFFSET Intel_Uni_List, 0, UNSUPPORTED_UNTESTED
+    db 'Intel Aries$         '
+
     dw INTEL_ID, 84C5h, PIIX2_ID, OFFSET PIIX_List, 1, UNSUPPORTED_UNTESTED
     db 'Intel 450KX/GX+PIIX2$'
 
@@ -2126,9 +2137,6 @@ ID_List:
 
     dw INTEL_ID, 84CAh, 0000h, OFFSET Intel_Uni_List, 1, UNSUPPORTED_UNTESTED
     db 'Intel 440NX$         '
-
-    dw INTEL_ID, 0486h, 0000h, OFFSET Intel_Uni_List, 0, UNSUPPORTED_UNTESTED
-    db 'Intel Aries$         '
 
 
 ;-----------------------------------------
@@ -2212,7 +2220,6 @@ ID_List:
  dw VIA_ID, 0605h, 0000h, OFFSET VIA_List, 1, 0
  db 'VIA Apollo PM133$    '
 
-
  dw VIA_ID, 3091h, 0686h, OFFSET No_List, 1, UNSUPPORTED_NO_DATASHEET
  db 'VIA Apollo Pro 266$  '
 
@@ -2276,31 +2283,29 @@ ID_List:
  dw VIA_ID, 0336h, 0000h, OFFSET No_List, 1, UNSUPPORTED_NO_DATASHEET
  db 'VIA K8M890CE$        '
 
- dw VIA_ID, 0340h, 0000h, OFFSET No_List, 1, UNSUPPORTED_NO_DATASHEET
- db 'VIA PT900$           '
+    dw VIA_ID, 0340h, 0000h, OFFSET No_List, 1, UNSUPPORTED_NO_DATASHEET
+    db 'VIA PT900$           '
 
- dw VIA_ID, 0351h, 0000h, OFFSET No_List, 1, UNSUPPORTED_NO_DATASHEET
- db 'VIA P4 chipset$      '
+    dw VIA_ID, 0351h, 0000h, OFFSET No_List, 1, UNSUPPORTED_NO_DATASHEET
+    db 'VIA P4 chipset$      '
 
- dw VIA_ID, 0353h, 0000h, OFFSET No_List, 1, UNSUPPORTED_NO_DATASHEET
- db 'VIA chipset$         '
+    dw VIA_ID, 0353h, 0000h, OFFSET No_List, 1, UNSUPPORTED_NO_DATASHEET
+    db 'VIA chipset$         '
 
- dw VIA_ID, 0364h, 0000h, OFFSET No_List, 1, UNSUPPORTED_NO_DATASHEET
- db 'VIA P4M900$          '
+    dw VIA_ID, 0364h, 0000h, OFFSET No_List, 1, UNSUPPORTED_NO_DATASHEET
+    db 'VIA P4M900$          '
 
-; ------------- VIA unknown --------------------
+;------------------- VIA Unknown --------------------
+    dw VIA_ID, 3133h, 0000h, OFFSET VIA_Uni_List, 1, UNSUPPORTED_UNTESTED
+    db 'VIA VT3133$          '
 
- dw VIA_ID, 3133h, 0000h, OFFSET VIA_Uni_List, 1, UNSUPPORTED_UNTESTED
- db 'VIA VT3133$          '
+    dw VIA_ID, 3158h, 0000h, OFFSET VIA_Uni_List, 1, UNSUPPORTED_UNTESTED
+    db 'VIA P4 ??? Dev=3158$ '
 
- dw VIA_ID, 3158h, 0000h, OFFSET VIA_Uni_List, 1, UNSUPPORTED_UNTESTED
- db 'VIA P4 ??? Dev=3158$ '
+    dw VIA_ID, 3156h, 0000h, OFFSET VIA_Uni_List, 1, UNSUPPORTED_UNTESTED
+    db 'VIA P/KN266$         '
 
- dw VIA_ID, 3156h, 0000h, OFFSET VIA_Uni_List, 1, UNSUPPORTED_UNTESTED
- db 'VIA P/KN266$         '
-
-; ------------- VIA K7 --------------------
-;
+;--------------------- VIA K7 ------------------------
 ; dw VIA_ID, 0391h, 0686h, OFFSET No_List, 1, UNSUPPORTED_WRONG_DOC
 ; db 'VIA KX133$           '
 ;
@@ -2326,24 +2331,24 @@ ID_List:
 ; --------------------------------------------
 ; ------------ VIA K8 ------------------------
 ; --------------------------------------------
-; dw VIA_ID, 3188h, 0000h, OFFSET No_List, 1, UNSUPPORTED_NO_DATASHEET
-; db 'VIA K8HTB$           '
+;    dw VIA_ID, 3188h, 0000h, OFFSET No_List, 1, UNSUPPORTED_NO_DATASHEET
+;    db 'VIA K8HTB$           '
 
 
 ; --------------------------------------------
 ; ------------ VIA Socket 7 ------------------
 ; --------------------------------------------
- dw VIA_ID, 0576h, 0000h, OFFSET No_List, 0, 4
- db 'VIA Apollo$          '
+     dw VIA_ID, 0576h, 0000h, OFFSET No_List, 0, 4
+     db 'VIA Apollo$          '
 
- dw VIA_ID, 0585h, 0586h, OFFSET VIA_List, 0, 0
- db 'VIA Apollo VP/VPX$   '
+     dw VIA_ID, 0585h, 0586h, OFFSET VIA_List, 0, 0
+     db 'VIA Apollo VP/VPX$   '
 
- dw VIA_ID, 0595h, 0586h, OFFSET VIA_List, 0, 0
- db 'VIA Apollo VP2$      '
+     dw VIA_ID, 0595h, 0586h, OFFSET VIA_List, 0, 0
+     db 'VIA Apollo VP2$      '
 
- dw VIA_ID, 1595h, 0586h, OFFSET VIA_List, 0, 0
- db 'VIA Apollo VP2/97$   '
+     dw VIA_ID, 1595h, 0586h, OFFSET VIA_List, 0, 0
+     db 'VIA Apollo VP2/97$   '
 
  dw VIA_ID, 0598h, 0586h, OFFSET VIA_List, 0, 0
  db 'VIA Apollo MVP3$     '
@@ -2370,9 +2375,9 @@ ID_List:
  db 'VIA Apollo MVP4$     '
 
 
-; -------------- VIA C7 -----------------------
-; dw VIA_ID, 7324h, 3324h, OFFSET VIA_CX700_list, 0, 0
-; db 'VIA CX700$           '
+;----------------------- VIA C7 -----------------------
+;    dw VIA_ID, 7324h, 3324h, OFFSET VIA_CX700_list, 0, 0
+;    db 'VIA CX700$           '
 ;
 ; dw VIA_ID, 7353h, 3353h, OFFSET VIA_CX700_list, 0, 0
 ; db 'VIA VX800/VX820$     '
@@ -2399,17 +2404,17 @@ ID_List:
 ;----------------------------------------------
 ;----------------------- SIS ------------------
 ; --------------------------------------------
- dw SIS_ID, 0496h, 0000h, OFFSET SIS496list, 0, UNSUPPORTED_UNTESTED
- db 'SiS 496$             '
+    dw SIS_ID, 0496h, 0000h, OFFSET SIS496list, 0, UNSUPPORTED_UNTESTED
+    db 'SiS 496$             '
 
- dw SIS_ID, 0406h, 0000h, OFFSET SIS501list, 0, 0
- db 'SiS 501$             '
+    dw SIS_ID, 0406h, 0000h, OFFSET SIS501list, 0, 0
+    db 'SiS 501$             '
 
- dw SIS_ID, 5511h, 0008h, OFFSET SIS511list, 0, 0
- db 'SiS 5511$            '
+    dw SIS_ID, 5511h, 0008h, OFFSET SIS511list, 0, 0
+    db 'SiS 5511$            '
 
- dw SIS_ID, 5571h, 0008h, OFFSET SIS571List, 0, 0
- db 'SiS 5571$            '
+    dw SIS_ID, 5571h, 0008h, OFFSET SIS571List, 0, 0
+    db 'SiS 5571$            '
 
  dw SIS_ID, 5596h, 0008h, OFFSET SIS59xList, 0, 0
  db 'SiS 5596$            '
@@ -2474,69 +2479,68 @@ ID_List:
  dw SIS_ID, 0661h, 0000h, OFFSET SIS600_List, 1, 0
  db 'SiS 661$             '
 
- dw SIS_ID, 0662h, 0000h, OFFSET SIS600_List, 1, 0
- db 'SiS 662$             '
+    dw SIS_ID, 0662h, 0000h, OFFSET SIS600_List, 1, 0
+    db 'SiS 662$             '
 
- dw SIS_ID, 0663h, 0000h, OFFSET SIS600_List, 1, 0
- db 'SiS 663$             '
+    dw SIS_ID, 0663h, 0000h, OFFSET SIS600_List, 1, 0
+    db 'SiS 663$             '
 
- dw SIS_ID, 0671h, 0000h, OFFSET SIS600_List, 1, 0
- db 'SiS 671$             '
+    dw SIS_ID, 0671h, 0000h, OFFSET SIS600_List, 1, 0
+    db 'SiS 671$             '
 
+;---------------------------------- SiS K7 ------------------------------------
+;    dw SIS_ID, 0730h, 0000h, OFFSET No_List, 1, UNSUPPORTED_NO_DATASHEET
+;    db 'SiS 730$             '
 
-; ----------------------------------- SiS K7 ----------------------------------
-; dw SIS_ID, 0730h, 0000h, OFFSET No_List, 1, UNSUPPORTED_NO_DATASHEET
-; db 'SiS 730$             '
+     dw SIS_ID, 0735h, 0000h, OFFSET SIS600_List, 1, UNSUPPORTED_UNTESTED
+     db 'SiS 735$             '
 
- dw SIS_ID, 0735h, 0000h, OFFSET SIS600_List, 1, UNSUPPORTED_UNTESTED
- db 'SiS 735$             '
-
- dw SIS_ID, 0740h, 0000h, OFFSET SIS600_List, 1, UNSUPPORTED_UNTESTED
- db 'SiS 740$             '
+     dw SIS_ID, 0740h, 0000h, OFFSET SIS600_List, 1, UNSUPPORTED_UNTESTED
+     db 'SiS 740$             '
  
- dw SIS_ID, 0741h, 0000h, OFFSET SIS600_List, 1, 0
- db 'SiS 741$             '
+     dw SIS_ID, 0741h, 0000h, OFFSET SIS600_List, 1, 0
+     db 'SiS 741$             '
  
- dw SIS_ID, 0745h, 0000h, OFFSET SIS600_List, 1, UNSUPPORTED_UNTESTED
- db 'SiS 745$             '
+     dw SIS_ID, 0745h, 0000h, OFFSET SIS600_List, 1, UNSUPPORTED_UNTESTED
+     db 'SiS 745$             '
 
- dw SIS_ID, 0750h, 0000h, OFFSET SIS600_List, 1, UNSUPPORTED_UNTESTED
- db 'SiS 750$             '
+     dw SIS_ID, 0750h, 0000h, OFFSET SIS600_List, 1, UNSUPPORTED_UNTESTED
+     db 'SiS 750$             '
 
 
 ;---------------------------------------------
-;-------------- ALI --------------------------
-; --------------------------------------------
+;------------------- ALI ---------------------
+;---------------------------------------------
 
-; --------------- ALI 486 --------------------
- dw ALI_ID, 1451h, 0000h, OFFSET ALI486_List, 0, UNSUPPORTED_UNTESTED
- db 'ALi M1451$           '
+;----------------- ALI 486 -------------------
+    dw ALI_ID, 1451h, 0000h, OFFSET ALI486_List, 0, UNSUPPORTED_UNTESTED
+    db 'ALi M1451$           '
 
- dw ALI_ID, 1489h, 0000h, OFFSET ALI486_List, 0, UNSUPPORTED_UNTESTED
- db 'ALi M1489$           '
+    dw ALI_ID, 1489h, 0000h, OFFSET ALI486_List, 0, UNSUPPORTED_UNTESTED
+    db 'ALi M1489$           '
 
-; --------------- ALI Socket 7 --------------------
- dw ALI_ID, 1541h, 0000h, OFFSET ALI5List, 0, 0
- db 'ALi Aladdin V$       '
+;--------------- ALI Socket 7 -----------------
+    dw ALI_ID, 1541h, 0000h, OFFSET ALI5List, 0, 0
+    db 'ALi Aladdin V$       '
 
- dw ALI_ID, 1531h, 0000h, OFFSET ALI3List, 0, 0
- db 'ALi Aladdin IV$      '
+    dw ALI_ID, 1531h, 0000h, OFFSET ALI3List, 0, 0
+    db 'ALi Aladdin IV$      '
 
- dw ALI_ID, 1521h, 0000h, OFFSET ALI3List, 0, 0
- db 'ALi Aladdin III$     '
+    dw ALI_ID, 1521h, 0000h, OFFSET ALI3List, 0, 0
+    db 'ALi Aladdin III$     '
 
- dw ALI_ID, 1511h, 0000h, OFFSET ALI2List, 0, 0
- db 'ALi Aladdin II$      '
+    dw ALI_ID, 1511h, 0000h, OFFSET ALI2List, 0, 0
+    db 'ALi Aladdin II$      '
 
-; --------------- ALI P2  --------------------
- dw ALI_ID, 1621h, 0000h, OFFSET ALIP2List, 1, 0
- db 'ALi Aladdin Pro II$  '
+;------------------- ALI P2 --------------------
+    dw ALI_ID, 1621h, 0000h, OFFSET ALIP2List, 1, 0
+    db 'ALi Aladdin Pro II$  '
 
- dw ALI_ID, 1631h, 0000h, OFFSET ALIP2List, 1, 0
- db 'ALi Aladdin Pro III$ '
+    dw ALI_ID, 1631h, 0000h, OFFSET ALIP2List, 1, 0
+    db 'ALi Aladdin Pro III$ '
 
- dw ALI_ID, 1632h, 0000h, OFFSET ALIP2List, 1, 0
- db 'ALi i1 CyberBlade$   '
+    dw ALI_ID, 1632h, 0000h, OFFSET ALIP2List, 1, 0
+    db 'ALi i1 CyberBlade$   '
 
  dw ALI_ID, 1641h, 0000h, OFFSET ALIP2List, 1, 0
  db 'ALi Aladdin Pro IV$  '
@@ -2548,8 +2552,8 @@ ID_List:
  db 'ALi M1644$           '
 
 ; --------------- ALI K7 ---------------------
-; dw ALI_ID, 1647h, 0000h, OFFSET ALIK7List, 1, UNSUPPORTED_NO_DATASHEET
-; db 'ALi ALiMAGiK 1$      '
+;    dw ALI_ID, 1647h, 0000h, OFFSET ALIK7List, 1, UNSUPPORTED_NO_DATASHEET
+;    db 'ALi ALiMAGiK 1$      '
 
 
 ;---------------------------------------------
@@ -2688,675 +2692,690 @@ ID_List:
  dw 17f3h, 6020h, 0, OFFSET No_List, 0, UNSUPPORTED_NO_DATASHEET
  db 'RDC R6020$           '
 
- dw 17f3h, 6022h, 0, OFFSET No_List, 0, UNSUPPORTED_NO_DATASHEET
- db 'RDC R6022$           '
+    dw 17f3h, 6022h, 0, OFFSET No_List, 0, UNSUPPORTED_NO_DATASHEET
+    db 'RDC R6022$           '
 
- ; 440ZX moved to the end of the list to test the integrity of the list in Virtual PC
- ;dw INTEL_ID, 7192h, PIIX4_ID, OFFSET IntelTestList, 1, 0
- ;db 'Intel 440ZX w/o AGPx$'
- dw INTEL_ID, 7192h, PIIX4_ID, OFFSET PIIX_List, 1, 0
- db 'Intel 440ZX w/o AGP$ '
- dw INTEL_ID, 1237h, PIIX3_ID, OFFSET PIIX_List, 1, 0
- db 'Intel 440FX$         '
- dw INTEL_ID, 1237h, 0000h, OFFSET Intel_Uni_List, 1, 0
- db 'Intel 440FX virtual$ '
+    ; 440ZX moved to the end of the list to test the integrity of the list in Virtual PC
+    ;dw INTEL_ID, 7192h, PIIX4_ID, OFFSET IntelTestList, 1, 0
+    ;db 'Intel 440ZX w/o AGPx$'
+
+    dw INTEL_ID, 7192h, PIIX4_ID, OFFSET PIIX_List, 1, 0
+    db 'Intel 440ZX w/o AGP$ '
+
+    dw INTEL_ID, 1237h, PIIX3_ID, OFFSET PIIX_List, 1, 0
+    db 'Intel 440FX$         '
+
+    dw INTEL_ID, 1237h, 0000h, OFFSET Intel_Uni_List, 1, 0
+    db 'Intel 440FX virtual$ '
 
 ;------------------------------------- END ------------------------------------
- dw 0000h                          ; Chipset list end marker
+    dw 0000h                       ; Chipset list end marker
 
 
-;Low = Mask
-;Hi  = Val
+;----------------- Defines for Chipsets Data Configuration List ---------------
+RWC_LO     equ 00F0Fh              ; Mask
+RWC_HI     equ 0F0F0h              ; Value
 
-RWC_Lo    equ 00F0Fh
-RWC_Hi    equ 0F0F0h
+;---------------------
+; Bits Mask
+;---------------------
+BIT_0      equ 0101h
+BIT_1      equ 0202h
+BIT_2      equ 0404h
+BIT_3      equ 0808h
+BIT_4      equ 1010h
+BIT_5      equ 2020h
+BIT_6      equ 4040h
+BIT_7      equ 8080h
 
-Bits_21   equ 0606h
+BITS_1_0   equ 0303h
+BITS_2_1   equ 0606h
+BITS_3_2   equ 0C0Ch
+BITS_5_4   equ 3030h
+BITS_7_6   equ 0C0C0h
 
-Bits_10   equ 0303h
-Bits_32   equ 0C0Ch
-Bits_54   equ 3030h
-Bits_76   equ 0C0C0h
-
-Bit_0     equ 0101h
-Bit_1     equ 0202h
-Bit_2     equ 0404h
-Bit_3     equ 0808h
-Bit_4     equ 1010h
-Bit_5     equ 2020h
-Bit_6     equ 4040h
-Bit_7     equ 8080h
-
-NotBit_0  equ 0001h
-NotBit_1  equ 0002h
-NotBit_2  equ 0004h
-NotBit_3  equ 0008h
-NotBit_4  equ 0010h
-NotBit_5  equ 0020h
-NotBit_6  equ 0040h
-NotBit_7  equ 0080h
-
+NOT_BIT_0  equ 0001h
+NOT_BIT_1  equ 0002h
+NOT_BIT_2  equ 0004h
+NOT_BIT_3  equ 0008h
+NOT_BIT_4  equ 0010h
+NOT_BIT_5  equ 0020h
+NOT_BIT_6  equ 0040h
+NOT_BIT_7  equ 0080h
+;------------------------------------------------------------------------------
 
 No_List:
- dw 00000h
+    dw 00000h
 
 
-EmptyList: ;dummy-Liste für K7 und K8
- dw 0C000h, 0Ah, 0h, 0, 0
- dw 0C400h, 0Ah, 0h, 0, 0
- dw 0C800h, 0Ah, 0h, 0, 0
- dw 0CC00h, 0Ah, 0h, 0, 0
- dw 0D000h, 0Ah, 0h, 0, 0
- dw 0D400h, 0Ah, 0h, 0, 0
- dw 0D800h, 0Ah, 0h, 0, 0
- dw 0DC00h, 0Ah, 0h, 0, 0
- dw 0E000h, 0Ah, 0h, 0, 0
- dw 0E400h, 0Ah, 0h, 0, 0
- dw 0E800h, 0Ah, 0h, 0, 0
- dw 0EC00h, 0Ah, 0h, 0, 0
- dw 0F000h, 0Ah, 0h, 0, 0 
- dw 0F400h, 0Ah, 0h, 0, 0 
- dw 0F800h, 0Ah, 0h, 0, 0 
- dw 0FC00h, 0Ah, 0h, 0, 0
- Dw 00000h
+EmptyList:  ; Dummy List for K7 and K8
+    dw 0C000h, 0Ah, 0h, 0, 0
+    dw 0C400h, 0Ah, 0h, 0, 0
+    dw 0C800h, 0Ah, 0h, 0, 0
+    dw 0CC00h, 0Ah, 0h, 0, 0
+    dw 0D000h, 0Ah, 0h, 0, 0
+    dw 0D400h, 0Ah, 0h, 0, 0
+    dw 0D800h, 0Ah, 0h, 0, 0
+    dw 0DC00h, 0Ah, 0h, 0, 0
+    dw 0E000h, 0Ah, 0h, 0, 0
+    dw 0E400h, 0Ah, 0h, 0, 0
+    dw 0E800h, 0Ah, 0h, 0, 0
+    dw 0EC00h, 0Ah, 0h, 0, 0
+    dw 0F000h, 0Ah, 0h, 0, 0 
+    dw 0F400h, 0Ah, 0h, 0, 0 
+    dw 0F800h, 0Ah, 0h, 0, 0 
+    dw 0FC00h, 0Ah, 0h, 0, 0
+    dw 00000h                      ; End of list marker
 
 
 SIO_List:  ; Segmente und Registerwerte fr Saturn, Mercury, Neptun
- dw 0C000h, 12h, 5Ah, RWC_lo, 154h, 0303h,  149h, Bit_0, 0
- dw 0C400h, 12h, 5Ah, RWC_hi, 154h, 0C0Ch,  149h, Bit_1, 0
- dw 0C800h, 12h, 5Bh, RWC_lo, 154h, 3030h,  149h, Bit_2, 0
- dw 0CC00h, 12h, 5Bh, RWC_hi, 154h, 0C0C0h, 149h, Bit_3, 0
- dw 0D000h, 12h, 5Ch, RWC_lo, 155h, 0303h,  149h, Bit_4, 0
- dw 0D400h, 12h, 5Ch, RWC_hi, 155h, 0C0Ch,  149h, Bit_5, 0
- dw 0D800h, 12h, 5Dh, RWC_lo, 155h, 3030h,  149h, Bit_6, 0
- dw 0DC00h, 12h, 5Dh, RWC_hi, 155h, 0C0C0h, 149h, Bit_7, 0
- dw 0E000h, 16h, 5Eh, RWC_lo, 156h, 0303h,  148h, Bit_3, 14Eh, 0040h, 0
- dw 0E400h, 16h, 5Eh, RWC_hi, 156h, 0C0Ch,  148h, Bit_3, 14Eh, 0040h, 0
- dw 0E800h, 16h, 5Fh, RWC_lo, 156h, 3030h,  148h, Bit_3, 14Eh, 0040h, 0
- dw 0EC00h, 16h, 5Fh, RWC_hi, 156h, 0C0C0h, 148h, Bit_3, 14Eh, 0040h, 0
- dw 0F000h, 0Ah, 59h, RWC_hi, 0 
- dw 0F400h, 0Ah, 59h, RWC_hi, 0 
- dw 0F800h, 0Ah, 59h, RWC_hi, 0 
- dw 0FC00h, 0Ah, 59h, RWC_hi, 0
- Dw 00000h
+    dw 0C000h, 12h, 5Ah, RWC_LO, 154h, 0303h,  149h, BIT_0, 0
+    dw 0C400h, 12h, 5Ah, RWC_HI, 154h, 0C0Ch,  149h, BIT_1, 0
+    dw 0C800h, 12h, 5Bh, RWC_LO, 154h, 3030h,  149h, BIT_2, 0
+    dw 0CC00h, 12h, 5Bh, RWC_HI, 154h, 0C0C0h, 149h, BIT_3, 0
+    dw 0D000h, 12h, 5Ch, RWC_LO, 155h, 0303h,  149h, BIT_4, 0
+    dw 0D400h, 12h, 5Ch, RWC_HI, 155h, 0C0Ch,  149h, BIT_5, 0
+    dw 0D800h, 12h, 5Dh, RWC_LO, 155h, 3030h,  149h, BIT_6, 0
+    dw 0DC00h, 12h, 5Dh, RWC_HI, 155h, 0C0C0h, 149h, BIT_7, 0
+    dw 0E000h, 16h, 5Eh, RWC_LO, 156h, 0303h,  148h, BIT_3, 14Eh, 0040h, 0
+    dw 0E400h, 16h, 5Eh, RWC_HI, 156h, 0C0Ch,  148h, BIT_3, 14Eh, 0040h, 0
+    dw 0E800h, 16h, 5Fh, RWC_LO, 156h, 3030h,  148h, BIT_3, 14Eh, 0040h, 0
+    dw 0EC00h, 16h, 5Fh, RWC_HI, 156h, 0C0C0h, 148h, BIT_3, 14Eh, 0040h, 0
+    dw 0F000h, 0Ah, 59h, RWC_HI, 0
+    dw 0F400h, 0Ah, 59h, RWC_HI, 0
+    dw 0F800h, 0Ah, 59h, RWC_HI, 0
+    dw 0FC00h, 0Ah, 59h, RWC_HI, 0
+    dw 00000h                      ; End of list marker
 
 
 PIIX_List:  ; Segmente und Registerwerte fr Intel 430 und 440 + PIIX
- dw 0C000h, 0Ah, 5Ah, RWC_lo, 0
- dw 0C400h, 0Ah, 5Ah, RWC_hi, 0
- dw 0C800h, 0Ah, 5Bh, RWC_lo, 0
- dw 0CC00h, 0Ah, 5Bh, RWC_hi, 0
- dw 0D000h, 0Ah, 5Ch, RWC_lo, 0
- dw 0D400h, 0Ah, 5Ch, RWC_hi, 0
- dw 0D800h, 0Ah, 5Dh, RWC_lo, 0
- dw 0DC00h, 0Ah, 5Dh, RWC_hi, 0
- dw 0E000h, 12h, 5Eh, RWC_lo, 169h, Bit_3, 14Eh, 0040h, 0
- dw 0E400h, 12h, 5Eh, RWC_hi, 169h, Bit_3, 14Eh, 0040h, 0
- dw 0E800h, 12h, 5Fh, RWC_lo, 169h, Bit_3, 14Eh, 0040h, 0
- dw 0EC00h, 12h, 5Fh, RWC_hi, 169h, Bit_3, 14Eh, 0040h, 0
- dw 0F000h, 0Ah, 59h, RWC_hi, 0 
- dw 0F400h, 0Ah, 59h, RWC_hi, 0 
- dw 0F800h, 0Ah, 59h, RWC_hi, 0 
- dw 0FC00h, 0Ah, 59h, RWC_hi, 0
- Dw 00000h
+    dw 0C000h, 0Ah, 5Ah, RWC_LO, 0
+    dw 0C400h, 0Ah, 5Ah, RWC_HI, 0
+    dw 0C800h, 0Ah, 5Bh, RWC_LO, 0
+    dw 0CC00h, 0Ah, 5Bh, RWC_HI, 0
+    dw 0D000h, 0Ah, 5Ch, RWC_LO, 0
+    dw 0D400h, 0Ah, 5Ch, RWC_HI, 0
+    dw 0D800h, 0Ah, 5Dh, RWC_LO, 0
+    dw 0DC00h, 0Ah, 5Dh, RWC_HI, 0
+    dw 0E000h, 12h, 5Eh, RWC_LO, 169h, BIT_3, 14Eh, 0040h, 0
+    dw 0E400h, 12h, 5Eh, RWC_HI, 169h, BIT_3, 14Eh, 0040h, 0
+    dw 0E800h, 12h, 5Fh, RWC_LO, 169h, BIT_3, 14Eh, 0040h, 0
+    dw 0EC00h, 12h, 5Fh, RWC_HI, 169h, BIT_3, 14Eh, 0040h, 0
+    dw 0F000h, 0Ah, 59h, RWC_HI, 0
+    dw 0F400h, 0Ah, 59h, RWC_HI, 0
+    dw 0F800h, 0Ah, 59h, RWC_HI, 0
+    dw 0FC00h, 0Ah, 59h, RWC_HI, 0
+    dw 00000h                      ; End of list marker
 
 
-Intel_Uni_List: ;Segmente und Registerwerte fr alle 'alten' Intel-PCI-Chips„tze, kein DMA
- dw 0C000h, 0Ah, 5Ah, RWC_lo, 0
- dw 0C400h, 0Ah, 5Ah, RWC_hi, 0
- dw 0C800h, 0Ah, 5Bh, RWC_lo, 0
- dw 0CC00h, 0Ah, 5Bh, RWC_hi, 0
- dw 0D000h, 0Ah, 5Ch, RWC_lo, 0
- dw 0D400h, 0Ah, 5Ch, RWC_hi, 0
- dw 0D800h, 0Ah, 5Dh, RWC_lo, 0
- dw 0DC00h, 0Ah, 5Dh, RWC_hi, 0
- dw 0E000h, 0Ah, 5Eh, RWC_lo, 0
- dw 0E400h, 0Ah, 5Eh, RWC_hi, 0
- dw 0E800h, 0Ah, 5Fh, RWC_lo, 0
- dw 0EC00h, 0Ah, 5Fh, RWC_hi, 0
- dw 0F000h, 0Ah, 59h, RWC_hi, 0 
- dw 0F400h, 0Ah, 59h, RWC_hi, 0 
- dw 0F800h, 0Ah, 59h, RWC_hi, 0 
- dw 0FC00h, 0Ah, 59h, RWC_hi, 0
- Dw 00000h
+Intel_Uni_List:  ; Segmente und Registerwerte fr alle 'alten' Intel-PCI-Chips„tze, kein DMA
+    dw 0C000h, 0Ah, 5Ah, RWC_LO, 0
+    dw 0C400h, 0Ah, 5Ah, RWC_HI, 0
+    dw 0C800h, 0Ah, 5Bh, RWC_LO, 0
+    dw 0CC00h, 0Ah, 5Bh, RWC_HI, 0
+    dw 0D000h, 0Ah, 5Ch, RWC_LO, 0
+    dw 0D400h, 0Ah, 5Ch, RWC_HI, 0
+    dw 0D800h, 0Ah, 5Dh, RWC_LO, 0
+    dw 0DC00h, 0Ah, 5Dh, RWC_HI, 0
+    dw 0E000h, 0Ah, 5Eh, RWC_LO, 0
+    dw 0E400h, 0Ah, 5Eh, RWC_HI, 0
+    dw 0E800h, 0Ah, 5Fh, RWC_LO, 0
+    dw 0EC00h, 0Ah, 5Fh, RWC_HI, 0
+    dw 0F000h, 0Ah, 59h, RWC_HI, 0
+    dw 0F400h, 0Ah, 59h, RWC_HI, 0
+    dw 0F800h, 0Ah, 59h, RWC_HI, 0
+    dw 0FC00h, 0Ah, 59h, RWC_HI, 0
+    dw 00000h                      ; End of list marker
 
 
-Intel845_List: ;Segmente und Registerwerte fr i845, i875, i9xx, X3x Chipsaetze, Intel Core 1st gen
- dw 0C000h, 0Ah, 91h, Bits_10, 0
- dw 0C400h, 0Ah, 91h, Bits_54, 0
- dw 0C800h, 0Ah, 92h, Bits_10, 0
- dw 0CC00h, 0Ah, 92h, Bits_54, 0
- dw 0D000h, 0Ah, 93h, Bits_10, 0
- dw 0D400h, 0Ah, 93h, Bits_54, 0
- dw 0D800h, 0Ah, 94h, Bits_10, 0
- dw 0DC00h, 0Ah, 94h, Bits_54, 0
- dw 0E000h, 0Ah, 95h, Bits_10, 0
- dw 0E400h, 0Ah, 95h, Bits_54, 0
- dw 0E800h, 0Ah, 96h, Bits_10, 0
- dw 0EC00h, 0Ah, 96h, Bits_54, 0
- dw 0F000h, 0Ah, 90h, Bits_54, 0 
- dw 0F400h, 0Ah, 90h, Bits_54, 0 
- dw 0F800h, 0Ah, 90h, Bits_54, 0 
- dw 0FC00h, 0Ah, 90h, Bits_54, 0
- Dw 00000h
+Intel845_List:  ; Segmente und Registerwerte fr i845, i875, i9xx, X3x Chipsaetze, Intel Core 1st gen
+    dw 0C000h, 0Ah, 91h, BITS_1_0, 0
+    dw 0C400h, 0Ah, 91h, BITS_5_4, 0
+    dw 0C800h, 0Ah, 92h, BITS_1_0, 0
+    dw 0CC00h, 0Ah, 92h, BITS_5_4, 0
+    dw 0D000h, 0Ah, 93h, BITS_1_0, 0
+    dw 0D400h, 0Ah, 93h, BITS_5_4, 0
+    dw 0D800h, 0Ah, 94h, BITS_1_0, 0
+    dw 0DC00h, 0Ah, 94h, BITS_5_4, 0
+    dw 0E000h, 0Ah, 95h, BITS_1_0, 0
+    dw 0E400h, 0Ah, 95h, BITS_5_4, 0
+    dw 0E800h, 0Ah, 96h, BITS_1_0, 0
+    dw 0EC00h, 0Ah, 96h, BITS_5_4, 0
+    dw 0F000h, 0Ah, 90h, BITS_5_4, 0 
+    dw 0F400h, 0Ah, 90h, BITS_5_4, 0 
+    dw 0F800h, 0Ah, 90h, BITS_5_4, 0 
+    dw 0FC00h, 0Ah, 90h, BITS_5_4, 0
+    dw 00000h                      ; End of list marker
 
 
-IntelCore2ndGenList: ;Segmente und Registerwerte fuer Intel Core i3, i5, i7 - xxxx (2nd, 3rd, 4th, 8th generation)
- dw 0C000h, 0Ah, 81h, Bits_10, 0
- dw 0C400h, 0Ah, 81h, Bits_54, 0
- dw 0C800h, 0Ah, 82h, Bits_10, 0
- dw 0CC00h, 0Ah, 82h, Bits_54, 0
- dw 0D000h, 0Ah, 83h, Bits_10, 0
- dw 0D400h, 0Ah, 83h, Bits_54, 0
- dw 0D800h, 0Ah, 84h, Bits_10, 0
- dw 0DC00h, 0Ah, 84h, Bits_54, 0
- dw 0E000h, 0Ah, 85h, Bits_10, 0
- dw 0E400h, 0Ah, 85h, Bits_54, 0
- dw 0E800h, 0Ah, 86h, Bits_10, 0
- dw 0EC00h, 0Ah, 86h, Bits_54, 0
- dw 0F000h, 0Ah, 80h, Bits_54, 0 
- dw 0F400h, 0Ah, 80h, Bits_54, 0 
- dw 0F800h, 0Ah, 80h, Bits_54, 0 
- dw 0FC00h, 0Ah, 80h, Bits_54, 0
- Dw 00000h
+IntelCore2ndGenList:  ; Segmente und Registerwerte fuer Intel Core i3, i5, i7 - xxxx (2nd, 3rd, 4th, 8th generation)
+    dw 0C000h, 0Ah, 81h, BITS_1_0, 0
+    dw 0C400h, 0Ah, 81h, BITS_5_4, 0
+    dw 0C800h, 0Ah, 82h, BITS_1_0, 0
+    dw 0CC00h, 0Ah, 82h, BITS_5_4, 0
+    dw 0D000h, 0Ah, 83h, BITS_1_0, 0
+    dw 0D400h, 0Ah, 83h, BITS_5_4, 0
+    dw 0D800h, 0Ah, 84h, BITS_1_0, 0
+    dw 0DC00h, 0Ah, 84h, BITS_5_4, 0
+    dw 0E000h, 0Ah, 85h, BITS_1_0, 0
+    dw 0E400h, 0Ah, 85h, BITS_5_4, 0
+    dw 0E800h, 0Ah, 86h, BITS_1_0, 0
+    dw 0EC00h, 0Ah, 86h, BITS_5_4, 0
+    dw 0F000h, 0Ah, 80h, BITS_5_4, 0 
+    dw 0F400h, 0Ah, 80h, BITS_5_4, 0 
+    dw 0F800h, 0Ah, 80h, BITS_5_4, 0 
+    dw 0FC00h, 0Ah, 80h, BITS_5_4, 0
+    dw 00000h                      ; End of list marker
 
-IntelCore7thGenList: ;Segmente und Registerwerte fuer Intel Core i3, i5, i7, i9 (7th..12th generation, with Lock bit at 80:0 cleared first)
- dw 0C000h, 0Eh, 80h, NotBit_0, 81h, Bits_10, 0
- dw 0C400h, 0Eh, 80h, NotBit_0, 81h, Bits_54, 0
- dw 0C800h, 0Eh, 80h, NotBit_0, 82h, Bits_10, 0
- dw 0CC00h, 0Eh, 80h, NotBit_0, 82h, Bits_54, 0
- dw 0D000h, 0Eh, 80h, NotBit_0, 83h, Bits_10, 0
- dw 0D400h, 0Eh, 80h, NotBit_0, 83h, Bits_54, 0
- dw 0D800h, 0Eh, 80h, NotBit_0, 84h, Bits_10, 0
- dw 0DC00h, 0Eh, 80h, NotBit_0, 84h, Bits_54, 0
- dw 0E000h, 0Eh, 80h, NotBit_0, 85h, Bits_10, 0
- dw 0E400h, 0Eh, 80h, NotBit_0, 85h, Bits_54, 0
- dw 0E800h, 0Eh, 80h, NotBit_0, 86h, Bits_10, 0
- dw 0EC00h, 0Eh, 80h, NotBit_0, 86h, Bits_54, 0
- dw 0F000h, 0Eh, 80h, NotBit_0, 80h, Bits_54, 0 
- dw 0F400h, 0Eh, 80h, NotBit_0, 80h, Bits_54, 0 
- dw 0F800h, 0Eh, 80h, NotBit_0, 80h, Bits_54, 0 
- dw 0FC00h, 0Eh, 80h, NotBit_0, 80h, Bits_54, 0
- Dw 00000h
 
-IntelCore2011List: ;Segmente und Registerwerte fuer Intel Core i3, i5, i7 - xxxx (2011 generation)
- dw 0C000h, 0Ah, 41h, Bits_10, 0
- dw 0C400h, 0Ah, 41h, Bits_54, 0
- dw 0C800h, 0Ah, 42h, Bits_10, 0
- dw 0CC00h, 0Ah, 42h, Bits_54, 0
- dw 0D000h, 0Ah, 43h, Bits_10, 0
- dw 0D400h, 0Ah, 43h, Bits_54, 0
- dw 0D800h, 0Ah, 44h, Bits_10, 0
- dw 0DC00h, 0Ah, 44h, Bits_54, 0
- dw 0E000h, 0Ah, 45h, Bits_10, 0
- dw 0E400h, 0Ah, 45h, Bits_54, 0
- dw 0E800h, 0Ah, 46h, Bits_10, 0
- dw 0EC00h, 0Ah, 46h, Bits_54, 0
- dw 0F000h, 0Ah, 40h, Bits_54, 0 
- dw 0F400h, 0Ah, 40h, Bits_54, 0 
- dw 0F800h, 0Ah, 40h, Bits_54, 0 
- dw 0FC00h, 0Ah, 40h, Bits_54, 0
- Dw 00000h
+IntelCore7thGenList:  ; Segmente und Registerwerte fuer Intel Core i3, i5, i7, i9 (7th..12th generation, with Lock bit at 80:0 cleared first)
+    dw 0C000h, 0Eh, 80h, NOT_BIT_0, 81h, BITS_1_0, 0
+    dw 0C400h, 0Eh, 80h, NOT_BIT_0, 81h, BITS_5_4, 0
+    dw 0C800h, 0Eh, 80h, NOT_BIT_0, 82h, BITS_1_0, 0
+    dw 0CC00h, 0Eh, 80h, NOT_BIT_0, 82h, BITS_5_4, 0
+    dw 0D000h, 0Eh, 80h, NOT_BIT_0, 83h, BITS_1_0, 0
+    dw 0D400h, 0Eh, 80h, NOT_BIT_0, 83h, BITS_5_4, 0
+    dw 0D800h, 0Eh, 80h, NOT_BIT_0, 84h, BITS_1_0, 0
+    dw 0DC00h, 0Eh, 80h, NOT_BIT_0, 84h, BITS_5_4, 0
+    dw 0E000h, 0Eh, 80h, NOT_BIT_0, 85h, BITS_1_0, 0
+    dw 0E400h, 0Eh, 80h, NOT_BIT_0, 85h, BITS_5_4, 0
+    dw 0E800h, 0Eh, 80h, NOT_BIT_0, 86h, BITS_1_0, 0
+    dw 0EC00h, 0Eh, 80h, NOT_BIT_0, 86h, BITS_5_4, 0
+    dw 0F000h, 0Eh, 80h, NOT_BIT_0, 80h, BITS_5_4, 0 
+    dw 0F400h, 0Eh, 80h, NOT_BIT_0, 80h, BITS_5_4, 0 
+    dw 0F800h, 0Eh, 80h, NOT_BIT_0, 80h, BITS_5_4, 0 
+    dw 0FC00h, 0Eh, 80h, NOT_BIT_0, 80h, BITS_5_4, 0
+    dw 00000h                      ; End of list marker
 
-Intel810_List: ;Segmente und Registerwerte fuer Intel-810, kein DMA
- dw 0C000h, 0Ah, 51h, Bits_10, 0
- dw 0C400h, 0Ah, 51h, Bits_10, 0
- dw 0C800h, 0Ah, 51h, Bits_10, 0
- dw 0CC00h, 0Ah, 51h, Bits_10, 0
- dw 0D000h, 0Ah, 51h, Bits_32, 0
- dw 0D400h, 0Ah, 51h, Bits_32, 0
- dw 0D800h, 0Ah, 51h, Bits_32, 0
- dw 0DC00h, 0Ah, 51h, Bits_32, 0
- dw 0E000h, 0Ah, 51h, Bits_54, 0
- dw 0E400h, 0Ah, 51h, Bits_54, 0
- dw 0E800h, 0Ah, 51h, Bits_54, 0
- dw 0EC00h, 0Ah, 51h, Bits_54, 0
- dw 0F000h, 0Ah, 51h, Bits_76, 0 
- dw 0F400h, 0Ah, 51h, Bits_76, 0 
- dw 0F800h, 0Ah, 51h, Bits_76, 0 
- dw 0FC00h, 0Ah, 51h, Bits_76, 0
- Dw 00000h
 
-; dw 0C000h, 0Ah, 41h, Bits_10, 0
-; dw 0C400h, 0Ah, 41h, Bits_54, 0
-; dw 0C800h, 0Ah, 42h, Bits_10, 0
-; dw 0CC00h, 0Ah, 42h, Bits_54, 0
-; dw 0D000h, 0Ah, 43h, Bits_10, 0
-; dw 0D400h, 0Ah, 43h, Bits_54, 0
-; dw 0D800h, 0Ah, 44h, Bits_10, 0
-; dw 0DC00h, 0Ah, 44h, Bits_54, 0
-; dw 0E000h, 0Ah, 45h, Bits_10, 0
-; dw 0E400h, 0Ah, 45h, Bits_54, 0
-; dw 0E800h, 0Ah, 46h, Bits_10, 0
-; dw 0EC00h, 0Ah, 46h, Bits_54, 0
-; dw 0F000h, 0Ah, 41h, Bits_54, 0 
-; dw 0F400h, 0Ah, 41h, Bits_54, 0 
-; dw 0F800h, 0Ah, 41h, Bits_54, 0 
-; dw 0FC00h, 0Ah, 41h, Bits_54, 0
-; Dw 00000h
+IntelCore2011List:  ; Segmente und Registerwerte fuer Intel Core i3, i5, i7 - xxxx (2011 generation)
+    dw 0C000h, 0Ah, 41h, BITS_1_0, 0
+    dw 0C400h, 0Ah, 41h, BITS_5_4, 0
+    dw 0C800h, 0Ah, 42h, BITS_1_0, 0
+    dw 0CC00h, 0Ah, 42h, BITS_5_4, 0
+    dw 0D000h, 0Ah, 43h, BITS_1_0, 0
+    dw 0D400h, 0Ah, 43h, BITS_5_4, 0
+    dw 0D800h, 0Ah, 44h, BITS_1_0, 0
+    dw 0DC00h, 0Ah, 44h, BITS_5_4, 0
+    dw 0E000h, 0Ah, 45h, BITS_1_0, 0
+    dw 0E400h, 0Ah, 45h, BITS_5_4, 0
+    dw 0E800h, 0Ah, 46h, BITS_1_0, 0
+    dw 0EC00h, 0Ah, 46h, BITS_5_4, 0
+    dw 0F000h, 0Ah, 40h, BITS_5_4, 0 
+    dw 0F400h, 0Ah, 40h, BITS_5_4, 0 
+    dw 0F800h, 0Ah, 40h, BITS_5_4, 0 
+    dw 0FC00h, 0Ah, 40h, BITS_5_4, 0
+    dw 00000h                      ; End of list marker
+
+
+
+Intel810_List:  ; Segmente und Registerwerte fuer Intel-810, kein DMA
+    dw 0C000h, 0Ah, 51h, BITS_1_0, 0
+    dw 0C400h, 0Ah, 51h, BITS_1_0, 0
+    dw 0C800h, 0Ah, 51h, BITS_1_0, 0
+    dw 0CC00h, 0Ah, 51h, BITS_1_0, 0
+    dw 0D000h, 0Ah, 51h, BITS_3_2, 0
+    dw 0D400h, 0Ah, 51h, BITS_3_2, 0
+    dw 0D800h, 0Ah, 51h, BITS_3_2, 0
+    dw 0DC00h, 0Ah, 51h, BITS_3_2, 0
+    dw 0E000h, 0Ah, 51h, BITS_5_4, 0
+    dw 0E400h, 0Ah, 51h, BITS_5_4, 0
+    dw 0E800h, 0Ah, 51h, BITS_5_4, 0
+    dw 0EC00h, 0Ah, 51h, BITS_5_4, 0
+    dw 0F000h, 0Ah, 51h, BITS_7_6, 0 
+    dw 0F400h, 0Ah, 51h, BITS_7_6, 0 
+    dw 0F800h, 0Ah, 51h, BITS_7_6, 0 
+    dw 0FC00h, 0Ah, 51h, BITS_7_6, 0
+    dw 00000h                      ; End of list marker
+
+;    dw 0C000h, 0Ah, 41h, BITS_1_0, 0
+;    dw 0C400h, 0Ah, 41h, BITS_5_4, 0
+;    dw 0C800h, 0Ah, 42h, BITS_1_0, 0
+;    dw 0CC00h, 0Ah, 42h, BITS_5_4, 0
+;    dw 0D000h, 0Ah, 43h, BITS_1_0, 0
+;    dw 0D400h, 0Ah, 43h, BITS_5_4, 0
+;    dw 0D800h, 0Ah, 44h, BITS_1_0, 0
+;    dw 0DC00h, 0Ah, 44h, BITS_5_4, 0
+;    dw 0E000h, 0Ah, 45h, BITS_1_0, 0
+;    dw 0E400h, 0Ah, 45h, BITS_5_4, 0
+;    dw 0E800h, 0Ah, 46h, BITS_1_0, 0
+;    dw 0EC00h, 0Ah, 46h, BITS_5_4, 0
+;    dw 0F000h, 0Ah, 41h, BITS_5_4, 0 
+;    dw 0F400h, 0Ah, 41h, BITS_5_4, 0 
+;    dw 0F800h, 0Ah, 41h, BITS_5_4, 0 
+;    dw 0FC00h, 0Ah, 41h, BITS_5_4, 0
+;    dw 00000h
 
 
 Intel_Atom_List:  ; write access globally only by setting Bit0 at D8 to 0
- dw 0C000h, 0Ah, 0D8h, NotBit_0, 0
- dw 0C400h, 0Ah, 0D8h, NotBit_0, 0
- dw 0C800h, 0Ah, 0D8h, NotBit_0, 0
- dw 0CC00h, 0Ah, 0D8h, NotBit_0, 0
- dw 0D000h, 0Ah, 0D8h, NotBit_0, 0
- dw 0D400h, 0Ah, 0D8h, NotBit_0, 0
- dw 0D800h, 0Ah, 0D8h, NotBit_0, 0
- dw 0DC00h, 0Ah, 0D8h, NotBit_0, 0
- dw 0E000h, 0Ah, 0D8h, NotBit_0, 0
- dw 0E400h, 0Ah, 0D8h, NotBit_0, 0
- dw 0E800h, 0Ah, 0D8h, NotBit_0, 0
- dw 0EC00h, 0Ah, 0D8h, NotBit_0, 0
- dw 0F000h, 0Ah, 0D8h, NotBit_0, 0 
- dw 0F400h, 0Ah, 0D8h, NotBit_0, 0 
- dw 0F800h, 0Ah, 0D8h, NotBit_0, 0 
- dw 0FC00h, 0Ah, 0D8h, NotBit_0, 0
- Dw 00000h
+    dw 0C000h, 0Ah, 0D8h, NOT_BIT_0, 0
+    dw 0C400h, 0Ah, 0D8h, NOT_BIT_0, 0
+    dw 0C800h, 0Ah, 0D8h, NOT_BIT_0, 0
+    dw 0CC00h, 0Ah, 0D8h, NOT_BIT_0, 0
+    dw 0D000h, 0Ah, 0D8h, NOT_BIT_0, 0
+    dw 0D400h, 0Ah, 0D8h, NOT_BIT_0, 0
+    dw 0D800h, 0Ah, 0D8h, NOT_BIT_0, 0
+    dw 0DC00h, 0Ah, 0D8h, NOT_BIT_0, 0
+    dw 0E000h, 0Ah, 0D8h, NOT_BIT_0, 0
+    dw 0E400h, 0Ah, 0D8h, NOT_BIT_0, 0
+    dw 0E800h, 0Ah, 0D8h, NOT_BIT_0, 0
+    dw 0EC00h, 0Ah, 0D8h, NOT_BIT_0, 0
+    dw 0F000h, 0Ah, 0D8h, NOT_BIT_0, 0 
+    dw 0F400h, 0Ah, 0D8h, NOT_BIT_0, 0 
+    dw 0F800h, 0Ah, 0D8h, NOT_BIT_0, 0 
+    dw 0FC00h, 0Ah, 0D8h, NOT_BIT_0, 0
+    dw 00000h                      ; End of list marker
 
 
+;---------- VIA PAM Constants ----------
 VIA_RW0  equ  0303h
 VIA_RW1  equ  0C0Ch
 VIA_RW2  equ  3030h
 VIA_RW3  equ 0C0C0h
+;---------------------------------------
 
 VIA_List:  ; Segmente und Registerwerte fr alle VIA-Chips„tze
- dw 0C000h, 18, 61h, VIA_RW0, 14Eh, Bit_0, 52h, 0080h, 0
- dw 0C400h, 18, 61h, VIA_RW1, 14Eh, Bit_1, 52h, 0080h, 0
- dw 0C800h, 14, 61h, VIA_RW2, 14Eh, Bit_2, 0
- dw 0CC00h, 14, 61h, VIA_RW3, 14Eh, Bit_3, 0
- dw 0D000h, 18, 62h, VIA_RW0, 14Eh, Bit_4, 52h, 0040h, 0
- dw 0D400h, 18, 62h, VIA_RW1, 14Eh, Bit_5, 52h, 0040h, 0
- dw 0D800h, 18, 62h, VIA_RW2, 14Eh, Bit_6, 52h, 0040h, 0
- dw 0DC00h, 18, 62h, VIA_RW3, 14Eh, Bit_7, 52h, 0040h, 0
- dw 0E000h, 18, 63h, VIA_RW3, 14Fh, Bit_3, 52h, 0020h, 0
- dw 0E400h, 18, 63h, VIA_RW3, 14Fh, Bit_3, 52h, 0020h, 0
- dw 0E800h, 18, 63h, VIA_RW3, 14Fh, Bit_3, 52h, 0020h, 0
- dw 0EC00h, 18, 63h, VIA_RW3, 14Fh, Bit_3, 52h, 0020h, 0
- dw 0F000h, 14, 63h, VIA_RW2, 52h, 0010h, 0
- dw 0F400h, 14, 63h, VIA_RW2, 52h, 0010h, 0
- dw 0F800h, 14, 63h, VIA_RW2, 52h, 0010h, 0
- dw 0FC00h, 14, 63h, VIA_RW2, 52h, 0010h, 0
- Dw 00000h
+    dw 0C000h, 18, 61h, VIA_RW0, 14Eh, BIT_0, 52h, 0080h, 0
+    dw 0C400h, 18, 61h, VIA_RW1, 14Eh, BIT_1, 52h, 0080h, 0
+    dw 0C800h, 14, 61h, VIA_RW2, 14Eh, BIT_2, 0
+    dw 0CC00h, 14, 61h, VIA_RW3, 14Eh, BIT_3, 0
+    dw 0D000h, 18, 62h, VIA_RW0, 14Eh, BIT_4, 52h, 0040h, 0
+    dw 0D400h, 18, 62h, VIA_RW1, 14Eh, BIT_5, 52h, 0040h, 0
+    dw 0D800h, 18, 62h, VIA_RW2, 14Eh, BIT_6, 52h, 0040h, 0
+    dw 0DC00h, 18, 62h, VIA_RW3, 14Eh, BIT_7, 52h, 0040h, 0
+    dw 0E000h, 18, 63h, VIA_RW3, 14Fh, BIT_3, 52h, 0020h, 0
+    dw 0E400h, 18, 63h, VIA_RW3, 14Fh, BIT_3, 52h, 0020h, 0
+    dw 0E800h, 18, 63h, VIA_RW3, 14Fh, BIT_3, 52h, 0020h, 0
+    dw 0EC00h, 18, 63h, VIA_RW3, 14Fh, BIT_3, 52h, 0020h, 0
+    dw 0F000h, 14, 63h, VIA_RW2, 52h, 0010h, 0
+    dw 0F400h, 14, 63h, VIA_RW2, 52h, 0010h, 0
+    dw 0F800h, 14, 63h, VIA_RW2, 52h, 0010h, 0
+    dw 0FC00h, 14, 63h, VIA_RW2, 52h, 0010h, 0
+    dw 00000h                      ; End of list marker
+
 
 VIA_Uni_List:  ; Segmente und Registerwerte fr alle VIA-Chips„tze
- dw 0C000h, 10, 61h, VIA_RW0, 0
- dw 0C400h, 10, 61h, VIA_RW1, 0
- dw 0C800h, 10, 61h, VIA_RW2, 0
- dw 0CC00h, 10, 61h, VIA_RW3, 0
- dw 0D000h, 10, 62h, VIA_RW0, 0
- dw 0D400h, 10, 62h, VIA_RW1, 0
- dw 0D800h, 10, 62h, VIA_RW2, 0
- dw 0DC00h, 10, 62h, VIA_RW3, 0
- dw 0E000h, 10, 63h, VIA_RW3, 0
- dw 0E400h, 10, 63h, VIA_RW3, 0
- dw 0E800h, 10, 63h, VIA_RW3, 0
- dw 0EC00h, 10, 63h, VIA_RW3, 0
- dw 0F000h, 10, 63h, VIA_RW2, 0
- dw 0F400h, 10, 63h, VIA_RW2, 0
- dw 0F800h, 10, 63h, VIA_RW2, 0
- dw 0FC00h, 10, 63h, VIA_RW2, 0
- Dw 00000h
+    dw 0C000h, 10, 61h, VIA_RW0, 0
+    dw 0C400h, 10, 61h, VIA_RW1, 0
+    dw 0C800h, 10, 61h, VIA_RW2, 0
+    dw 0CC00h, 10, 61h, VIA_RW3, 0
+    dw 0D000h, 10, 62h, VIA_RW0, 0
+    dw 0D400h, 10, 62h, VIA_RW1, 0
+    dw 0D800h, 10, 62h, VIA_RW2, 0
+    dw 0DC00h, 10, 62h, VIA_RW3, 0
+    dw 0E000h, 10, 63h, VIA_RW3, 0
+    dw 0E400h, 10, 63h, VIA_RW3, 0
+    dw 0E800h, 10, 63h, VIA_RW3, 0
+    dw 0EC00h, 10, 63h, VIA_RW3, 0
+    dw 0F000h, 10, 63h, VIA_RW2, 0
+    dw 0F400h, 10, 63h, VIA_RW2, 0
+    dw 0F800h, 10, 63h, VIA_RW2, 0
+    dw 0FC00h, 10, 63h, VIA_RW2, 0
+    dw 00000h                      ; End of list marker
+
 
 ;VIA_CX700_list:  ; Segmente und Registerwerte fr VIA CX700 + VX8xx + VX900 Chipsaetze (function 7+3)
-; dw 0C000h, 14, 61h, VIA_RW0, 180h, VIA_RW0, 0
-; dw 0C400h, 14, 61h, VIA_RW1, 180h, VIA_RW1, 0
-; dw 0C800h, 14, 61h, VIA_RW2, 180h, VIA_RW2, 0
-; dw 0CC00h, 14, 61h, VIA_RW3, 180h, VIA_RW3, 0
-; dw 0D000h, 14, 62h, VIA_RW0, 181h, VIA_RW0, 0
-; dw 0D400h, 14, 62h, VIA_RW1, 181h, VIA_RW1, 0
-; dw 0D800h, 14, 62h, VIA_RW2, 181h, VIA_RW2, 0
-; dw 0DC00h, 14, 62h, VIA_RW3, 181h, VIA_RW3, 0
-; dw 0E000h, 14, 63h, VIA_RW3, 182h, VIA_RW0, 0
-; dw 0E400h, 14, 63h, VIA_RW3, 182h, VIA_RW1, 0
-; dw 0E800h, 14, 63h, VIA_RW3, 182h, VIA_RW2, 0
-; dw 0EC00h, 14, 63h, VIA_RW3, 182h, VIA_RW3, 0
-; dw 0F000h, 14, 63h, VIA_RW2, 183h, VIA_RW2, 0
-; dw 0F400h, 14, 63h, VIA_RW2, 183h, VIA_RW2, 0
-; dw 0F800h, 14, 63h, VIA_RW2, 183h, VIA_RW2, 0
-; dw 0FC00h, 14, 63h, VIA_RW2, 183h, VIA_RW2, 0
-; Dw 00000h
+;    dw 0C000h, 14, 61h, VIA_RW0, 180h, VIA_RW0, 0
+;    dw 0C400h, 14, 61h, VIA_RW1, 180h, VIA_RW1, 0
+;    dw 0C800h, 14, 61h, VIA_RW2, 180h, VIA_RW2, 0
+;    dw 0CC00h, 14, 61h, VIA_RW3, 180h, VIA_RW3, 0
+;    dw 0D000h, 14, 62h, VIA_RW0, 181h, VIA_RW0, 0
+;    dw 0D400h, 14, 62h, VIA_RW1, 181h, VIA_RW1, 0
+;    dw 0D800h, 14, 62h, VIA_RW2, 181h, VIA_RW2, 0
+;    dw 0DC00h, 14, 62h, VIA_RW3, 181h, VIA_RW3, 0
+;    dw 0E000h, 14, 63h, VIA_RW3, 182h, VIA_RW0, 0
+;    dw 0E400h, 14, 63h, VIA_RW3, 182h, VIA_RW1, 0
+;    dw 0E800h, 14, 63h, VIA_RW3, 182h, VIA_RW2, 0
+;    dw 0EC00h, 14, 63h, VIA_RW3, 182h, VIA_RW3, 0
+;    dw 0F000h, 14, 63h, VIA_RW2, 183h, VIA_RW2, 0
+;    dw 0F400h, 14, 63h, VIA_RW2, 183h, VIA_RW2, 0
+;    dw 0F800h, 14, 63h, VIA_RW2, 183h, VIA_RW2, 0
+;    dw 0FC00h, 14, 63h, VIA_RW2, 183h, VIA_RW2, 0
+;    dw 00000h                      ; End of list marker
+
 
 VIA_CX700_list:  ; Segmente und Registerwerte fr VIA CX700 + VX8xx + VX900 Chipsaetze (function 7+3)
- dw 0C000h, 10, 80h, VIA_RW0, 0
- dw 0C400h, 10, 80h, VIA_RW1, 0
- dw 0C800h, 10, 80h, VIA_RW2, 0
- dw 0CC00h, 10, 80h, VIA_RW3, 0
- dw 0D000h, 10, 81h, VIA_RW0, 0
- dw 0D400h, 10, 81h, VIA_RW1, 0
- dw 0D800h, 10, 81h, VIA_RW2, 0
- dw 0DC00h, 10, 81h, VIA_RW3, 0
- dw 0E000h, 10, 82h, VIA_RW0, 0
- dw 0E400h, 10, 82h, VIA_RW1, 0
- dw 0E800h, 10, 82h, VIA_RW2, 0
- dw 0EC00h, 10, 82h, VIA_RW3, 0
- dw 0F000h, 10, 83h, VIA_RW2, 0
- dw 0F400h, 10, 83h, VIA_RW2, 0
- dw 0F800h, 10, 83h, VIA_RW2, 0
- dw 0FC00h, 10, 83h, VIA_RW2, 0
- Dw 00000h
+    dw 0C000h, 10, 80h, VIA_RW0, 0
+    dw 0C400h, 10, 80h, VIA_RW1, 0
+    dw 0C800h, 10, 80h, VIA_RW2, 0
+    dw 0CC00h, 10, 80h, VIA_RW3, 0
+    dw 0D000h, 10, 81h, VIA_RW0, 0
+    dw 0D400h, 10, 81h, VIA_RW1, 0
+    dw 0D800h, 10, 81h, VIA_RW2, 0
+    dw 0DC00h, 10, 81h, VIA_RW3, 0
+    dw 0E000h, 10, 82h, VIA_RW0, 0
+    dw 0E400h, 10, 82h, VIA_RW1, 0
+    dw 0E800h, 10, 82h, VIA_RW2, 0
+    dw 0EC00h, 10, 82h, VIA_RW3, 0
+    dw 0F000h, 10, 83h, VIA_RW2, 0
+    dw 0F400h, 10, 83h, VIA_RW2, 0
+    dw 0F800h, 10, 83h, VIA_RW2, 0
+    dw 0FC00h, 10, 83h, VIA_RW2, 0
+    dw 00000h                      ; End of list marker
 
 
 ; ================================================================
 
 
 SIS600xxList:  ; Segmente und Registerwerte fr SIS 6x0-PCI-Chips„tze
- dw 0C000h, 18, 70h, Bit_0, 72h, Bit_0, 149h, Bit_0, 0
- dw 0C400h, 18, 70h, Bit_1, 72h, Bit_1, 149h, Bit_1, 0
- dw 0C800h, 18, 70h, Bit_2, 72h, Bit_2, 149h, Bit_2, 0
- dw 0CC00h, 18, 70h, Bit_3, 72h, Bit_3, 149h, Bit_3, 0
- dw 0D000h, 18, 70h, Bit_4, 72h, Bit_4, 149h, Bit_4, 0
- dw 0D400h, 18, 70h, Bit_5, 72h, Bit_5, 149h, Bit_5, 0
- dw 0D800h, 18, 70h, Bit_6, 72h, Bit_6, 149h, Bit_6, 0
- dw 0DC00h, 18, 70h, Bit_7, 72h, Bit_7, 149h, Bit_7, 0
- dw 0E000h, 18, 71h, Bit_0, 73h, Bit_0, 148h, Bit_3, 0
- dw 0E400h, 18, 71h, Bit_1, 73h, Bit_1, 148h, Bit_3, 0
- dw 0E800h, 18, 71h, Bit_2, 73h, Bit_2, 148h, Bit_3, 0
- dw 0EC00h, 18, 71h, Bit_3, 73h, Bit_3, 148h, Bit_3, 0
- dw 0F000h, 14, 71h, Bit_4, 73h, Bit_4, 0
- dw 0F400h, 14, 71h, Bit_4, 73h, Bit_4, 0
- dw 0F800h, 14, 71h, Bit_4, 73h, Bit_4, 0
- dw 0FC00h, 14, 71h, Bit_4, 73h, Bit_4, 0
- Dw 00000h
+    dw 0C000h, 18, 70h, BIT_0, 72h, BIT_0, 149h, BIT_0, 0
+    dw 0C400h, 18, 70h, BIT_1, 72h, BIT_1, 149h, BIT_1, 0
+    dw 0C800h, 18, 70h, BIT_2, 72h, BIT_2, 149h, BIT_2, 0
+    dw 0CC00h, 18, 70h, BIT_3, 72h, BIT_3, 149h, BIT_3, 0
+    dw 0D000h, 18, 70h, BIT_4, 72h, BIT_4, 149h, BIT_4, 0
+    dw 0D400h, 18, 70h, BIT_5, 72h, BIT_5, 149h, BIT_5, 0
+    dw 0D800h, 18, 70h, BIT_6, 72h, BIT_6, 149h, BIT_6, 0
+    dw 0DC00h, 18, 70h, BIT_7, 72h, BIT_7, 149h, BIT_7, 0
+    dw 0E000h, 18, 71h, BIT_0, 73h, BIT_0, 148h, BIT_3, 0
+    dw 0E400h, 18, 71h, BIT_1, 73h, BIT_1, 148h, BIT_3, 0
+    dw 0E800h, 18, 71h, BIT_2, 73h, BIT_2, 148h, BIT_3, 0
+    dw 0EC00h, 18, 71h, BIT_3, 73h, BIT_3, 148h, BIT_3, 0
+    dw 0F000h, 14, 71h, BIT_4, 73h, BIT_4, 0
+    dw 0F400h, 14, 71h, BIT_4, 73h, BIT_4, 0
+    dw 0F800h, 14, 71h, BIT_4, 73h, BIT_4, 0
+    dw 0FC00h, 14, 71h, BIT_4, 73h, BIT_4, 0
+    dw 00000h                      ; End of list marker
 
 
 SIS600_List:  ; Segmente und Registerwerte fr SIS 6x0-PCI-Chips„tze
- dw 0C000h, 14, 70h, Bit_0, 72h, Bit_0, 0
- dw 0C400h, 14, 70h, Bit_1, 72h, Bit_1, 0
- dw 0C800h, 14, 70h, Bit_2, 72h, Bit_2, 0
- dw 0CC00h, 14, 70h, Bit_3, 72h, Bit_3, 0
- dw 0D000h, 14, 70h, Bit_4, 72h, Bit_4, 0
- dw 0D400h, 14, 70h, Bit_5, 72h, Bit_5, 0
- dw 0D800h, 14, 70h, Bit_6, 72h, Bit_6, 0
- dw 0DC00h, 14, 70h, Bit_7, 72h, Bit_7, 0
- dw 0E000h, 14, 71h, Bit_0, 73h, Bit_0, 0
- dw 0E400h, 14, 71h, Bit_1, 73h, Bit_1, 0
- dw 0E800h, 14, 71h, Bit_2, 73h, Bit_2, 0
- dw 0EC00h, 14, 71h, Bit_3, 73h, Bit_3, 0
- dw 0F000h, 14, 71h, Bit_4, 73h, Bit_4, 0
- dw 0F400h, 14, 71h, Bit_4, 73h, Bit_4, 0
- dw 0F800h, 14, 71h, Bit_4, 73h, Bit_4, 0
- dw 0FC00h, 14, 71h, Bit_4, 73h, Bit_4, 0
- Dw 00000h
+    dw 0C000h, 14, 70h, BIT_0, 72h, BIT_0, 0
+    dw 0C400h, 14, 70h, BIT_1, 72h, BIT_1, 0
+    dw 0C800h, 14, 70h, BIT_2, 72h, BIT_2, 0
+    dw 0CC00h, 14, 70h, BIT_3, 72h, BIT_3, 0
+    dw 0D000h, 14, 70h, BIT_4, 72h, BIT_4, 0
+    dw 0D400h, 14, 70h, BIT_5, 72h, BIT_5, 0
+    dw 0D800h, 14, 70h, BIT_6, 72h, BIT_6, 0
+    dw 0DC00h, 14, 70h, BIT_7, 72h, BIT_7, 0
+    dw 0E000h, 14, 71h, BIT_0, 73h, BIT_0, 0
+    dw 0E400h, 14, 71h, BIT_1, 73h, BIT_1, 0
+    dw 0E800h, 14, 71h, BIT_2, 73h, BIT_2, 0
+    dw 0EC00h, 14, 71h, BIT_3, 73h, BIT_3, 0
+    dw 0F000h, 14, 71h, BIT_4, 73h, BIT_4, 0
+    dw 0F400h, 14, 71h, BIT_4, 73h, BIT_4, 0
+    dw 0F800h, 14, 71h, BIT_4, 73h, BIT_4, 0
+    dw 0FC00h, 14, 71h, BIT_4, 73h, BIT_4, 0
+    dw 00000h                      ; End of list marker
 
 
-SIS_RWC_Lo  equ 00E0Eh
-SIS_RWC_Hi  equ 0E0E0h
-SIS_RW_Lo   equ 00A0Ah
-SIS_RW_Hi   equ 0A0A0h
+;--------------------------------------
+SIS_RWC_LO  equ 00E0Eh
+SIS_RWC_HI  equ 0E0E0h
+SIS_RW_LO   equ 00A0Ah
+SIS_RW_HI   equ 0A0A0h
+;--------------------------------------
 
 SIS59xList:  ; Segmente und Registerwerte fr SIS 5xxx-PCI-Chips„tze
- dw 0C000h, 0Eh, 70h, SIS_RW_Hi, 149h, Bit_0, 0
- dw 0C400h, 0Eh, 70h, SIS_RW_lo, 149h, Bit_1, 0
- dw 0C800h, 0Eh, 71h, SIS_RW_hi, 149h, Bit_2, 0
- dw 0CC00h, 0Eh, 71h, SIS_RW_lo, 149h, Bit_3, 0
- dw 0D000h, 0Eh, 72h, SIS_RW_hi, 149h, Bit_4, 0
- dw 0D400h, 0Eh, 72h, SIS_RW_lo, 149h, Bit_5, 0
- dw 0D800h, 0Eh, 73h, SIS_RW_hi, 149h, Bit_6, 0
- dw 0DC00h, 0Eh, 73h, SIS_RW_lo, 149h, Bit_7, 0
- dw 0E000h, 0Eh, 74h, SIS_RW_hi, 148h, Bit_3, 0
- dw 0E400h, 0Eh, 74h, SIS_RW_lo, 148h, Bit_3, 0
- dw 0E800h, 0Eh, 75h, SIS_RW_hi, 148h, Bit_3, 0
- dw 0EC00h, 0Eh, 75h, SIS_RW_lo, 148h, Bit_3, 0
- dw 0F000h, 0Ah, 76h, SIS_RW_hi, 0
- dw 0F400h, 0Ah, 76h, SIS_RW_hi, 0
- dw 0F800h, 0Ah, 76h, SIS_RW_hi, 0
- dw 0FC00h, 0Ah, 76h, SIS_RW_hi, 0
- Dw 00000h
+    dw 0C000h, 0Eh, 70h, SIS_RW_HI, 149h, BIT_0, 0
+    dw 0C400h, 0Eh, 70h, SIS_RW_LO, 149h, BIT_1, 0
+    dw 0C800h, 0Eh, 71h, SIS_RW_HI, 149h, BIT_2, 0
+    dw 0CC00h, 0Eh, 71h, SIS_RW_LO, 149h, BIT_3, 0
+    dw 0D000h, 0Eh, 72h, SIS_RW_HI, 149h, BIT_4, 0
+    dw 0D400h, 0Eh, 72h, SIS_RW_LO, 149h, BIT_5, 0
+    dw 0D800h, 0Eh, 73h, SIS_RW_HI, 149h, BIT_6, 0
+    dw 0DC00h, 0Eh, 73h, SIS_RW_LO, 149h, BIT_7, 0
+    dw 0E000h, 0Eh, 74h, SIS_RW_HI, 148h, BIT_3, 0
+    dw 0E400h, 0Eh, 74h, SIS_RW_LO, 148h, BIT_3, 0
+    dw 0E800h, 0Eh, 75h, SIS_RW_HI, 148h, BIT_3, 0
+    dw 0EC00h, 0Eh, 75h, SIS_RW_LO, 148h, BIT_3, 0
+    dw 0F000h, 0Ah, 76h, SIS_RW_HI, 0
+    dw 0F400h, 0Ah, 76h, SIS_RW_HI, 0
+    dw 0F800h, 0Ah, 76h, SIS_RW_HI, 0
+    dw 0FC00h, 0Ah, 76h, SIS_RW_HI, 0
+    dw 00000h                      ; End of list marker
 
 
 SIS597List:  ; Segmente und Registerwerte fr SIS 5xxx-PCI-Chips„tze
- dw 0C000h, 0Eh, 70h, SIS_RW_Hi, 149h, Bit_0, 0
- dw 0C400h, 0Eh, 70h, SIS_RW_lo, 149h, Bit_1, 0
- dw 0C800h, 0Eh, 71h, SIS_RW_hi, 149h, Bit_2, 0
- dw 0CC00h, 0Eh, 71h, SIS_RW_lo, 149h, Bit_3, 0
- dw 0D000h, 0Eh, 72h, SIS_RW_hi, 149h, Bit_4, 0
- dw 0D400h, 0Eh, 72h, SIS_RW_lo, 149h, Bit_5, 0
- dw 0D800h, 0Eh, 73h, SIS_RW_hi, 149h, Bit_6, 0
- dw 0DC00h, 0Eh, 73h, SIS_RW_lo, 149h, Bit_7, 0
- dw 0E000h, 0Eh, 74h, SIS_RW_hi, 148h, Bit_3, 0
- dw 0E400h, 0Eh, 74h, SIS_RW_lo, 148h, Bit_3, 0
- dw 0E800h, 0Eh, 75h, SIS_RW_hi, 148h, Bit_3, 0
- dw 0EC00h, 0Eh, 75h, SIS_RW_lo, 148h, Bit_3, 0
- dw 0F000h, 0Ah, 76h, SIS_RW_hi, 0
- dw 0F400h, 0Ah, 76h, SIS_RW_hi, 0
- dw 0F800h, 0Ah, 76h, SIS_RW_hi, 0
- dw 0FC00h, 0Ah, 76h, SIS_RW_hi, 0
- Dw 00000h
+    dw 0C000h, 0Eh, 70h, SIS_RW_HI, 149h, BIT_0, 0
+    dw 0C400h, 0Eh, 70h, SIS_RW_LO, 149h, BIT_1, 0
+    dw 0C800h, 0Eh, 71h, SIS_RW_HI, 149h, BIT_2, 0
+    dw 0CC00h, 0Eh, 71h, SIS_RW_LO, 149h, BIT_3, 0
+    dw 0D000h, 0Eh, 72h, SIS_RW_HI, 149h, BIT_4, 0
+    dw 0D400h, 0Eh, 72h, SIS_RW_LO, 149h, BIT_5, 0
+    dw 0D800h, 0Eh, 73h, SIS_RW_HI, 149h, BIT_6, 0
+    dw 0DC00h, 0Eh, 73h, SIS_RW_LO, 149h, BIT_7, 0
+    dw 0E000h, 0Eh, 74h, SIS_RW_HI, 148h, BIT_3, 0
+    dw 0E400h, 0Eh, 74h, SIS_RW_LO, 148h, BIT_3, 0
+    dw 0E800h, 0Eh, 75h, SIS_RW_HI, 148h, BIT_3, 0
+    dw 0EC00h, 0Eh, 75h, SIS_RW_LO, 148h, BIT_3, 0
+    dw 0F000h, 0Ah, 76h, SIS_RW_HI, 0
+    dw 0F400h, 0Ah, 76h, SIS_RW_HI, 0
+    dw 0F800h, 0Ah, 76h, SIS_RW_HI, 0
+    dw 0FC00h, 0Ah, 76h, SIS_RW_HI, 0
+    dw 00000h                      ; End of list marker
 
 
 SIS571List:  ; Segmente und Registerwerte fr SIS 5571-PCI-Chipsatz
- dw 0C000h, 0Eh, 70h, SIS_RW_hi, 149h, Bit_0, 0
- dw 0C400h, 0Eh, 70h, SIS_RW_lo, 149h, Bit_1, 0
- dw 0C800h, 0Eh, 71h, SIS_RW_hi, 149h, Bit_2, 0
- dw 0CC00h, 0Eh, 71h, SIS_RW_lo, 149h, Bit_3, 0
- dw 0D000h, 0Eh, 72h, SIS_RW_hi, 149h, Bit_4, 0
- dw 0D400h, 0Eh, 72h, SIS_RW_lo, 149h, Bit_5, 0
- dw 0D800h, 0Eh, 73h, SIS_RW_hi, 149h, Bit_6, 0
- dw 0DC00h, 0Eh, 73h, SIS_RW_lo, 149h, Bit_7, 0
- dw 0E000h, 0Eh, 74h, SIS_RW_hi, 148h, Bit_3, 0
- dw 0E400h, 0Eh, 74h, SIS_RW_lo, 148h, Bit_3, 0
- dw 0E800h, 0Eh, 75h, SIS_RW_hi, 148h, Bit_3, 0
- dw 0EC00h, 0Eh, 75h, SIS_RW_lo, 148h, Bit_3, 0
- dw 0F000h, 0Ah, 76h, SIS_RW_hi, 0
- dw 0F400h, 0Ah, 76h, SIS_RW_hi, 0
- dw 0F800h, 0Ah, 76h, SIS_RW_hi, 0
- dw 0FC00h, 0Ah, 76h, SIS_RW_hi, 0
- Dw 00000h
+    dw 0C000h, 0Eh, 70h, SIS_RW_HI, 149h, BIT_0, 0
+    dw 0C400h, 0Eh, 70h, SIS_RW_LO, 149h, BIT_1, 0
+    dw 0C800h, 0Eh, 71h, SIS_RW_HI, 149h, BIT_2, 0
+    dw 0CC00h, 0Eh, 71h, SIS_RW_LO, 149h, BIT_3, 0
+    dw 0D000h, 0Eh, 72h, SIS_RW_HI, 149h, BIT_4, 0
+    dw 0D400h, 0Eh, 72h, SIS_RW_LO, 149h, BIT_5, 0
+    dw 0D800h, 0Eh, 73h, SIS_RW_HI, 149h, BIT_6, 0
+    dw 0DC00h, 0Eh, 73h, SIS_RW_LO, 149h, BIT_7, 0
+    dw 0E000h, 0Eh, 74h, SIS_RW_HI, 148h, BIT_3, 0
+    dw 0E400h, 0Eh, 74h, SIS_RW_LO, 148h, BIT_3, 0
+    dw 0E800h, 0Eh, 75h, SIS_RW_HI, 148h, BIT_3, 0
+    dw 0EC00h, 0Eh, 75h, SIS_RW_LO, 148h, BIT_3, 0
+    dw 0F000h, 0Ah, 76h, SIS_RW_HI, 0
+    dw 0F400h, 0Ah, 76h, SIS_RW_HI, 0
+    dw 0F800h, 0Ah, 76h, SIS_RW_HI, 0
+    dw 0FC00h, 0Ah, 76h, SIS_RW_HI, 0
+    dw 00000h                      ; End of list marker
 
 
 SIS511List:  ; Segmente und Registerwerte fr SIS 5511-PCI-Chipsatz
- dw 0C000h, 0Eh, 80h, SIS_RW_hi, 149h, Bit_0, 0
- dw 0C400h, 0Eh, 80h, SIS_RW_lo, 149h, Bit_1, 0
- dw 0C800h, 0Eh, 81h, SIS_RW_hi, 149h, Bit_2, 0
- dw 0CC00h, 0Eh, 81h, SIS_RW_lo, 149h, Bit_3, 0
- dw 0D000h, 0Eh, 82h, SIS_RW_hi, 149h, Bit_4, 0
- dw 0D400h, 0Eh, 82h, SIS_RW_lo, 149h, Bit_5, 0
- dw 0D800h, 0Eh, 83h, SIS_RW_hi, 149h, Bit_6, 0
- dw 0DC00h, 0Eh, 83h, SIS_RW_lo, 149h, Bit_7, 0
- dw 0E000h, 0Eh, 84h, SIS_RW_hi, 148h, Bit_3, 0
- dw 0E400h, 0Eh, 84h, SIS_RW_lo, 148h, Bit_3, 0
- dw 0E800h, 0Eh, 85h, SIS_RW_hi, 148h, Bit_3, 0
- dw 0EC00h, 0Eh, 85h, SIS_RW_lo, 148h, Bit_3, 0
- dw 0F000h, 0Ah, 86h, SIS_RW_hi, 0
- dw 0F400h, 0Ah, 86h, SIS_RW_hi, 0
- dw 0F800h, 0Ah, 86h, SIS_RW_hi, 0
- dw 0FC00h, 0Ah, 86h, SIS_RW_hi, 0
- Dw 00000h
+    dw 0C000h, 0Eh, 80h, SIS_RW_HI, 149h, BIT_0, 0
+    dw 0C400h, 0Eh, 80h, SIS_RW_LO, 149h, BIT_1, 0
+    dw 0C800h, 0Eh, 81h, SIS_RW_HI, 149h, BIT_2, 0
+    dw 0CC00h, 0Eh, 81h, SIS_RW_LO, 149h, BIT_3, 0
+    dw 0D000h, 0Eh, 82h, SIS_RW_HI, 149h, BIT_4, 0
+    dw 0D400h, 0Eh, 82h, SIS_RW_LO, 149h, BIT_5, 0
+    dw 0D800h, 0Eh, 83h, SIS_RW_HI, 149h, BIT_6, 0
+    dw 0DC00h, 0Eh, 83h, SIS_RW_LO, 149h, BIT_7, 0
+    dw 0E000h, 0Eh, 84h, SIS_RW_HI, 148h, BIT_3, 0
+    dw 0E400h, 0Eh, 84h, SIS_RW_LO, 148h, BIT_3, 0
+    dw 0E800h, 0Eh, 85h, SIS_RW_HI, 148h, BIT_3, 0
+    dw 0EC00h, 0Eh, 85h, SIS_RW_LO, 148h, BIT_3, 0
+    dw 0F000h, 0Ah, 86h, SIS_RW_HI, 0
+    dw 0F400h, 0Ah, 86h, SIS_RW_HI, 0
+    dw 0F800h, 0Ah, 86h, SIS_RW_HI, 0
+    dw 0FC00h, 0Ah, 86h, SIS_RW_HI, 0
+    dw 00000h                      ; End of list marker
 
 
 SIS496List:  ; Segmente und Registerwerte fr SIS 496 Chipsatz
- dw 0C000h, 18, 44h, Bit_0, 45h, 0706h, 46h, Bit_0, 0
- dw 0C400h, 18, 44h, Bit_0, 45h, 0706h, 46h, Bit_0, 0
- dw 0C800h, 18, 44h, Bit_1, 45h, 0706h, 46h, Bit_1, 0
- dw 0CC00h, 18, 44h, Bit_1, 45h, 0706h, 46h, Bit_1, 0
- dw 0D000h, 18, 44h, Bit_2, 45h, 0706h, 46h, Bit_2, 0
- dw 0D400h, 18, 44h, Bit_2, 45h, 0706h, 46h, Bit_2, 0
- dw 0D800h, 18, 44h, Bit_3, 45h, 0706h, 46h, Bit_3, 0
- dw 0DC00h, 18, 44h, Bit_3, 45h, 0706h, 46h, Bit_3, 0
- dw 0E000h, 18, 44h, Bit_4, 45h, 0706h, 46h, Bit_4, 0
- dw 0E400h, 18, 44h, Bit_4, 45h, 0706h, 46h, Bit_4, 0
- dw 0E800h, 18, 44h, Bit_5, 45h, 0706h, 46h, Bit_5, 0
- dw 0EC00h, 18, 44h, Bit_5, 45h, 0706h, 46h, Bit_5, 0
- dw 0F000h, 18, 44h, Bit_6, 45h, 0706h, 46h, Bit_6, 0
- dw 0F400h, 18, 44h, Bit_6, 45h, 0706h, 46h, Bit_6, 0
- dw 0F800h, 18, 44h, Bit_7, 45h, 0706h, 46h, Bit_7, 0
- dw 0FC00h, 18, 44h, Bit_7, 45h, 0706h, 46h, Bit_7, 0
- Dw 00000h
+    dw 0C000h, 18, 44h, BIT_0, 45h, 0706h, 46h, BIT_0, 0
+    dw 0C400h, 18, 44h, BIT_0, 45h, 0706h, 46h, BIT_0, 0
+    dw 0C800h, 18, 44h, BIT_1, 45h, 0706h, 46h, BIT_1, 0
+    dw 0CC00h, 18, 44h, BIT_1, 45h, 0706h, 46h, BIT_1, 0
+    dw 0D000h, 18, 44h, BIT_2, 45h, 0706h, 46h, BIT_2, 0
+    dw 0D400h, 18, 44h, BIT_2, 45h, 0706h, 46h, BIT_2, 0
+    dw 0D800h, 18, 44h, BIT_3, 45h, 0706h, 46h, BIT_3, 0
+    dw 0DC00h, 18, 44h, BIT_3, 45h, 0706h, 46h, BIT_3, 0
+    dw 0E000h, 18, 44h, BIT_4, 45h, 0706h, 46h, BIT_4, 0
+    dw 0E400h, 18, 44h, BIT_4, 45h, 0706h, 46h, BIT_4, 0
+    dw 0E800h, 18, 44h, BIT_5, 45h, 0706h, 46h, BIT_5, 0
+    dw 0EC00h, 18, 44h, BIT_5, 45h, 0706h, 46h, BIT_5, 0
+    dw 0F000h, 18, 44h, BIT_6, 45h, 0706h, 46h, BIT_6, 0
+    dw 0F400h, 18, 44h, BIT_6, 45h, 0706h, 46h, BIT_6, 0
+    dw 0F800h, 18, 44h, BIT_7, 45h, 0706h, 46h, BIT_7, 0
+    dw 0FC00h, 18, 44h, BIT_7, 45h, 0706h, 46h, BIT_7, 0
+    dw 00000h                      ; End of list marker
 
 
 SIS501List:  ; Segmente und Registerwerte fr SIS 501 Chipsatz
- dw 0C000h, 14, 56h, 8888h, 53h, 2000h, 0
- dw 0C400h, 14, 56h, 4444h, 53h, 2000h, 0
- dw 0C800h, 14, 56h, 2222h, 53h, 2000h, 0
- dw 0CC00h, 14, 56h, 1111h, 53h, 2000h, 0
- dw 0D000h, 14, 55h, 8888h, 53h, 2000h, 0
- dw 0D400h, 14, 55h, 4444h, 53h, 2000h, 0
- dw 0D800h, 14, 55h, 2222h, 53h, 2000h, 0
- dw 0DC00h, 14, 55h, 1111h, 53h, 2000h, 0
- dw 0E000h, 14, 54h, 8888h, 53h, 2000h, 0
- dw 0E400h, 14, 54h, 4444h, 53h, 2000h, 0
- dw 0E800h, 14, 54h, 2222h, 53h, 2000h, 0
- dw 0EC00h, 14, 54h, 1111h, 53h, 2000h, 0
- dw 0F000h, 10, 53h, 6040h, 0
- dw 0F400h, 10, 53h, 6040h, 0
- dw 0F800h, 10, 53h, 6040h, 0
- dw 0FC00h, 10, 53h, 6040h, 0
- Dw 00000h
+    dw 0C000h, 14, 56h, 8888h, 53h, 2000h, 0
+    dw 0C400h, 14, 56h, 4444h, 53h, 2000h, 0
+    dw 0C800h, 14, 56h, 2222h, 53h, 2000h, 0
+    dw 0CC00h, 14, 56h, 1111h, 53h, 2000h, 0
+    dw 0D000h, 14, 55h, 8888h, 53h, 2000h, 0
+    dw 0D400h, 14, 55h, 4444h, 53h, 2000h, 0
+    dw 0D800h, 14, 55h, 2222h, 53h, 2000h, 0
+    dw 0DC00h, 14, 55h, 1111h, 53h, 2000h, 0
+    dw 0E000h, 14, 54h, 8888h, 53h, 2000h, 0
+    dw 0E400h, 14, 54h, 4444h, 53h, 2000h, 0
+    dw 0E800h, 14, 54h, 2222h, 53h, 2000h, 0
+    dw 0EC00h, 14, 54h, 1111h, 53h, 2000h, 0
+    dw 0F000h, 10, 53h, 6040h, 0
+    dw 0F400h, 10, 53h, 6040h, 0
+    dw 0F800h, 10, 53h, 6040h, 0
+    dw 0FC00h, 10, 53h, 6040h, 0
+    dw 00000h                      ; End of list marker
 
 
 ALI5List:  ; Segmente und Registerwerte fr ALI V
- dw 0C000h, 18, 56h, Bit_0, 58h, Bit_0, 5Ah, NotBit_0, 0
- dw 0C400h, 18, 56h, Bit_1, 58h, Bit_1, 5Ah, NotBit_1, 0
- dw 0C800h, 18, 56h, Bit_2, 58h, Bit_2, 5Ah, NotBit_2, 0
- dw 0CC00h, 18, 56h, Bit_3, 58h, Bit_3, 5Ah, NotBit_3, 0
- dw 0D000h, 18, 56h, Bit_4, 58h, Bit_4, 5Ah, NotBit_4, 0
- dw 0D400h, 18, 56h, Bit_5, 58h, Bit_5, 5Ah, NotBit_5, 0
- dw 0D800h, 18, 56h, Bit_6, 58h, Bit_6, 5Ah, NotBit_6, 0
- dw 0DC00h, 18, 56h, Bit_7, 58h, Bit_7, 5Ah, NotBit_7, 0
- dw 0E000h, 18, 57h, Bit_0, 59h, Bit_0, 5Bh, NotBit_0, 0
- dw 0E400h, 18, 57h, Bit_1, 59h, Bit_1, 5Bh, NotBit_1, 0
- dw 0E800h, 18, 57h, Bit_2, 59h, Bit_2, 5Bh, NotBit_2, 0
- dw 0EC00h, 18, 57h, Bit_3, 59h, Bit_3, 5Bh, NotBit_3, 0
- Dw 00000h
+    dw 0C000h, 18, 56h, BIT_0, 58h, BIT_0, 5Ah, NOT_BIT_0, 0
+    dw 0C400h, 18, 56h, BIT_1, 58h, BIT_1, 5Ah, NOT_BIT_1, 0
+    dw 0C800h, 18, 56h, BIT_2, 58h, BIT_2, 5Ah, NOT_BIT_2, 0
+    dw 0CC00h, 18, 56h, BIT_3, 58h, BIT_3, 5Ah, NOT_BIT_3, 0
+    dw 0D000h, 18, 56h, BIT_4, 58h, BIT_4, 5Ah, NOT_BIT_4, 0
+    dw 0D400h, 18, 56h, BIT_5, 58h, BIT_5, 5Ah, NOT_BIT_5, 0
+    dw 0D800h, 18, 56h, BIT_6, 58h, BIT_6, 5Ah, NOT_BIT_6, 0
+    dw 0DC00h, 18, 56h, BIT_7, 58h, BIT_7, 5Ah, NOT_BIT_7, 0
+    dw 0E000h, 18, 57h, BIT_0, 59h, BIT_0, 5Bh, NOT_BIT_0, 0
+    dw 0E400h, 18, 57h, BIT_1, 59h, BIT_1, 5Bh, NOT_BIT_1, 0
+    dw 0E800h, 18, 57h, BIT_2, 59h, BIT_2, 5Bh, NOT_BIT_2, 0
+    dw 0EC00h, 18, 57h, BIT_3, 59h, BIT_3, 5Bh, NOT_BIT_3, 0
+    dw 00000h                      ; End of list marker
 
 
 ALI2list:  ; Segmente und Registerwerte fr ALI II (1511)
- dw 0C000h, 18, 4Ah, Bits_21, 4Ch, Bit_0, 4Eh, NotBit_0, 0 
- dw 0C400h, 18, 4Ah, Bits_21, 4Ch, Bit_1, 4Eh, NotBit_0, 0 
- dw 0C800h, 18, 4Ah, Bits_21, 4Ch, Bit_2, 4Eh, NotBit_1, 0 
- dw 0CC00h, 18, 4Ah, Bits_21, 4Ch, Bit_3, 4Eh, NotBit_1, 0 
- dw 0D000h, 18, 4Ah, Bits_21, 4Ch, Bit_4, 4Eh, NotBit_2, 0 
- dw 0D400h, 18, 4Ah, Bits_21, 4Ch, Bit_5, 4Eh, NotBit_2, 0 
- dw 0D800h, 18, 4Ah, Bits_21, 4Ch, Bit_6, 4Eh, NotBit_3, 0 
- dw 0DC00h, 18, 4Ah, Bits_21, 4Ch, Bit_7, 4Eh, NotBit_3, 0 
- dw 0E000h, 18, 4Ah, Bits_21, 4Dh, Bit_0, 4Eh, NotBit_4, 0 
- dw 0E400h, 18, 4Ah, Bits_21, 4Dh, Bit_1, 4Eh, NotBit_4, 0 
- dw 0E800h, 18, 4Ah, Bits_21, 4Dh, Bit_2, 4Eh, NotBit_5, 0 
- dw 0EC00h, 18, 4Ah, Bits_21, 4Dh, Bit_3, 4Eh, NotBit_5, 0 
- dw 0F000h, 18, 4Ah, Bits_21, 4Dh, Bit_4, 4Eh, NotBit_6, 0 
- dw 0F400h, 18, 4Ah, Bits_21, 4Dh, Bit_5, 4Eh, NotBit_6, 0 
- dw 0F800h, 18, 4Ah, Bits_21, 4Dh, Bit_6, 4Eh, NotBit_7, 0 
- dw 0FC00h, 18, 4Ah, Bits_21, 4Dh, Bit_7, 4Eh, NotBit_7, 0 
- Dw 00000h
+ dw 0C000h, 18, 4Ah, BITS_2_1, 4Ch, BIT_0, 4Eh, NOT_BIT_0, 0 
+ dw 0C400h, 18, 4Ah, BITS_2_1, 4Ch, BIT_1, 4Eh, NOT_BIT_0, 0 
+ dw 0C800h, 18, 4Ah, BITS_2_1, 4Ch, BIT_2, 4Eh, NOT_BIT_1, 0 
+ dw 0CC00h, 18, 4Ah, BITS_2_1, 4Ch, BIT_3, 4Eh, NOT_BIT_1, 0 
+ dw 0D000h, 18, 4Ah, BITS_2_1, 4Ch, BIT_4, 4Eh, NOT_BIT_2, 0 
+ dw 0D400h, 18, 4Ah, BITS_2_1, 4Ch, BIT_5, 4Eh, NOT_BIT_2, 0 
+ dw 0D800h, 18, 4Ah, BITS_2_1, 4Ch, BIT_6, 4Eh, NOT_BIT_3, 0 
+ dw 0DC00h, 18, 4Ah, BITS_2_1, 4Ch, BIT_7, 4Eh, NOT_BIT_3, 0 
+ dw 0E000h, 18, 4Ah, BITS_2_1, 4Dh, BIT_0, 4Eh, NOT_BIT_4, 0 
+ dw 0E400h, 18, 4Ah, BITS_2_1, 4Dh, BIT_1, 4Eh, NOT_BIT_4, 0 
+ dw 0E800h, 18, 4Ah, BITS_2_1, 4Dh, BIT_2, 4Eh, NOT_BIT_5, 0 
+ dw 0EC00h, 18, 4Ah, BITS_2_1, 4Dh, BIT_3, 4Eh, NOT_BIT_5, 0 
+    dw 0F000h, 18, 4Ah, BITS_2_1, 4Dh, BIT_4, 4Eh, NOT_BIT_6, 0
+    dw 0F400h, 18, 4Ah, BITS_2_1, 4Dh, BIT_5, 4Eh, NOT_BIT_6, 0
+    dw 0F800h, 18, 4Ah, BITS_2_1, 4Dh, BIT_6, 4Eh, NOT_BIT_7, 0
+    dw 0FC00h, 18, 4Ah, BITS_2_1, 4Dh, BIT_7, 4Eh, NOT_BIT_7, 0
+    dw 00000h                      ; End of list marker
 
 
 ALI3list:  ; Segmente und Registerwerte fr ALI III und IV
- dw 0C000h, 18, 4Ch, Bit_0, 4Eh, Bit_0, 50h, NotBit_0, 0 
- dw 0C400h, 18, 4Ch, Bit_1, 4Eh, Bit_1, 50h, NotBit_1, 0 
- dw 0C800h, 18, 4Ch, Bit_2, 4Eh, Bit_2, 50h, NotBit_2, 0 
- dw 0CC00h, 18, 4Ch, Bit_3, 4Eh, Bit_3, 50h, NotBit_3, 0 
- dw 0D000h, 18, 4Ch, Bit_4, 4Eh, Bit_4, 50h, NotBit_4, 0 
- dw 0D400h, 18, 4Ch, Bit_5, 4Eh, Bit_5, 50h, NotBit_5, 0 
- dw 0D800h, 18, 4Ch, Bit_6, 4Eh, Bit_6, 50h, NotBit_6, 0 
- dw 0DC00h, 18, 4Ch, Bit_7, 4Eh, Bit_7, 50h, NotBit_7, 0 
- dw 0E000h, 18, 4Dh, Bit_0, 4Fh, Bit_0, 51h, NotBit_0, 0 
- dw 0E400h, 18, 4Dh, Bit_1, 4Fh, Bit_1, 51h, NotBit_1, 0 
- dw 0E800h, 18, 4Dh, Bit_2, 4Fh, Bit_2, 51h, NotBit_2, 0 
- dw 0EC00h, 18, 4Dh, Bit_3, 4Fh, Bit_3, 51h, NotBit_3, 0 
- Dw 00000h
+    dw 0C000h, 18, 4Ch, BIT_0, 4Eh, BIT_0, 50h, NOT_BIT_0, 0
+    dw 0C400h, 18, 4Ch, BIT_1, 4Eh, BIT_1, 50h, NOT_BIT_1, 0
+    dw 0C800h, 18, 4Ch, BIT_2, 4Eh, BIT_2, 50h, NOT_BIT_2, 0
+    dw 0CC00h, 18, 4Ch, BIT_3, 4Eh, BIT_3, 50h, NOT_BIT_3, 0
+    dw 0D000h, 18, 4Ch, BIT_4, 4Eh, BIT_4, 50h, NOT_BIT_4, 0
+    dw 0D400h, 18, 4Ch, BIT_5, 4Eh, BIT_5, 50h, NOT_BIT_5, 0
+    dw 0D800h, 18, 4Ch, BIT_6, 4Eh, BIT_6, 50h, NOT_BIT_6, 0
+    dw 0DC00h, 18, 4Ch, BIT_7, 4Eh, BIT_7, 50h, NOT_BIT_7, 0
+    dw 0E000h, 18, 4Dh, BIT_0, 4Fh, BIT_0, 51h, NOT_BIT_0, 0
+    dw 0E400h, 18, 4Dh, BIT_1, 4Fh, BIT_1, 51h, NOT_BIT_1, 0 
+    dw 0E800h, 18, 4Dh, BIT_2, 4Fh, BIT_2, 51h, NOT_BIT_2, 0 
+    dw 0EC00h, 18, 4Dh, BIT_3, 4Fh, BIT_3, 51h, NOT_BIT_3, 0 
+    dw 00000h                      ; End of list marker
 
 
 ALIP2List:
- dw 0C000h, 10, 84h, Bits_54, 0 
- dw 0C400h, 10, 84h, Bits_76, 0 
- dw 0C800h, 10, 85h, Bits_10, 0 
- dw 0CC00h, 10, 85h, Bits_32, 0 
- dw 0D000h, 10, 85h, Bits_54, 0 
- dw 0D400h, 10, 85h, Bits_76, 0 
- dw 0D800h, 10, 86h, Bits_10, 0 
- dw 0DC00h, 10, 86h, Bits_32, 0
- dw 0E000h, 10, 86h, Bits_54, 0 
- dw 0E400h, 10, 86h, Bits_76, 0 
- dw 0E800h, 10, 87h, Bits_10, 0 
- dw 0EC00h, 10, 87h, Bits_32, 0 
- Dw 00000h
+    dw 0C000h, 10, 84h, BITS_5_4, 0 
+    dw 0C400h, 10, 84h, BITS_7_6, 0 
+    dw 0C800h, 10, 85h, BITS_1_0, 0 
+    dw 0CC00h, 10, 85h, BITS_3_2, 0 
+    dw 0D000h, 10, 85h, BITS_5_4, 0 
+    dw 0D400h, 10, 85h, BITS_7_6, 0 
+    dw 0D800h, 10, 86h, BITS_1_0, 0 
+    dw 0DC00h, 10, 86h, BITS_3_2, 0
+    dw 0E000h, 10, 86h, BITS_5_4, 0 
+    dw 0E400h, 10, 86h, BITS_7_6, 0 
+    dw 0E800h, 10, 87h, BITS_1_0, 0 
+    dw 0EC00h, 10, 87h, BITS_3_2, 0 
+    dw 00000h                      ; End of list marker
 
 
 ALIK7List:
- dw 0C000h, 10, 90h, Bits_10, 0 
- dw 0C400h, 10, 90h, Bits_32, 0 
- dw 0C800h, 10, 90h, Bits_54, 0 
- dw 0CC00h, 10, 90h, Bits_76, 0 
- dw 0D000h, 10, 91h, Bits_10, 0 
- dw 0D400h, 10, 91h, Bits_32, 0 
- dw 0D800h, 10, 91h, Bits_54, 0 
- dw 0DC00h, 10, 91h, Bits_76, 0 
- dw 0E000h, 10, 92h, Bits_10, 0 
- dw 0E400h, 10, 92h, Bits_32, 0 
- dw 0E800h, 10, 92h, Bits_54, 0 
- dw 0EC00h, 10, 92h, Bits_76, 0 
- dw 0F000h, 10, 93h, Bits_10, 0 
- dw 0F400h, 10, 93h, Bits_10, 0 
- dw 0F800h, 10, 93h, Bits_10, 0 
- dw 0FC00h, 10, 93h, Bits_10, 0 
- Dw 00000h
+    dw 0C000h, 10, 90h, BITS_1_0, 0 
+    dw 0C400h, 10, 90h, BITS_3_2, 0 
+    dw 0C800h, 10, 90h, BITS_5_4, 0 
+    dw 0CC00h, 10, 90h, BITS_7_6, 0 
+    dw 0D000h, 10, 91h, BITS_1_0, 0 
+    dw 0D400h, 10, 91h, BITS_3_2, 0 
+    dw 0D800h, 10, 91h, BITS_5_4, 0 
+    dw 0DC00h, 10, 91h, BITS_7_6, 0 
+    dw 0E000h, 10, 92h, BITS_1_0, 0 
+    dw 0E400h, 10, 92h, BITS_3_2, 0 
+    dw 0E800h, 10, 92h, BITS_5_4, 0 
+    dw 0EC00h, 10, 92h, BITS_7_6, 0 
+    dw 0F000h, 10, 93h, BITS_1_0, 0 
+    dw 0F400h, 10, 93h, BITS_1_0, 0 
+    dw 0F800h, 10, 93h, BITS_1_0, 0 
+    dw 0FC00h, 10, 93h, BITS_1_0, 0 
+    dw 00000h                      ; End of list marker
 
 
 ALI486_List:
- dw 0C000h, 18, 13h, Bit_0, 14h, Bits_54, 17h, 80C0h, 0 
- dw 0C400h, 18, 13h, Bit_1, 14h, Bits_54, 17h, 80C0h, 0 
- dw 0C800h, 18, 13h, Bit_2, 14h, Bits_54, 17h, 80C0h, 0 
- dw 0CC00h, 18, 13h, Bit_3, 14h, Bits_54, 17h, 80C0h, 0 
- dw 0D000h, 18, 13h, Bit_4, 14h, Bits_54, 17h, 80C0h, 0 
- dw 0D400h, 18, 13h, Bit_5, 14h, Bits_54, 17h, 80C0h, 0 
- dw 0D800h, 18, 13h, Bit_6, 14h, Bits_54, 17h, 80C0h, 0 
- dw 0DC00h, 18, 13h, Bit_7, 14h, Bits_54, 17h, 80C0h, 0
- dw 0E000h, 18, 14h, Bit_0, 14h, Bits_54, 17h, 80C0h, 0 
- dw 0E400h, 18, 14h, Bit_0, 14h, Bits_54, 17h, 80C0h, 0 
- dw 0E800h, 18, 14h, Bit_1, 14h, Bits_54, 17h, 80C0h, 0 
- dw 0EC00h, 18, 14h, Bit_1, 14h, Bits_54, 17h, 80C0h, 0 
- Dw 00000h
+    dw 0C000h, 18, 13h, BIT_0, 14h, BITS_5_4, 17h, 80C0h, 0 
+    dw 0C400h, 18, 13h, BIT_1, 14h, BITS_5_4, 17h, 80C0h, 0 
+    dw 0C800h, 18, 13h, BIT_2, 14h, BITS_5_4, 17h, 80C0h, 0 
+    dw 0CC00h, 18, 13h, BIT_3, 14h, BITS_5_4, 17h, 80C0h, 0 
+    dw 0D000h, 18, 13h, BIT_4, 14h, BITS_5_4, 17h, 80C0h, 0 
+    dw 0D400h, 18, 13h, BIT_5, 14h, BITS_5_4, 17h, 80C0h, 0 
+    dw 0D800h, 18, 13h, BIT_6, 14h, BITS_5_4, 17h, 80C0h, 0
+    dw 0DC00h, 18, 13h, BIT_7, 14h, BITS_5_4, 17h, 80C0h, 0
+    dw 0E000h, 18, 14h, BIT_0, 14h, BITS_5_4, 17h, 80C0h, 0
+    dw 0E400h, 18, 14h, BIT_0, 14h, BITS_5_4, 17h, 80C0h, 0
+    dw 0E800h, 18, 14h, BIT_1, 14h, BITS_5_4, 17h, 80C0h, 0
+    dw 0EC00h, 18, 14h, BIT_1, 14h, BITS_5_4, 17h, 80C0h, 0
+    dw 00000h                      ; End of list marker
 
 
 PProList:  ; MTRR-Werte fr PPro
- dw 0C000h, 14, 268h, Typ_06, Typ_06, 000h, 000h
- dw 0C400h, 14, 268h, 000h, 000h, Typ_06, Typ_06
- dw 0C800h, 14, 269h, Typ_06, Typ_06, 000h, 000h
- dw 0CC00h, 14, 269h, 000h, 000h, Typ_06, Typ_06
- dw 0D000h, 14, 26Ah, Typ_06, Typ_06, 000h, 000h
- dw 0D400h, 14, 26Ah, 000h, 000h, Typ_06, Typ_06
- dw 0D800h, 14, 26Bh, Typ_06, Typ_06, 000h, 000h
- dw 0DC00h, 14, 26Bh, 000h, 000h, Typ_06, Typ_06
- dw 0E000h, 14, 26Ch, Typ_06, Typ_06, 000h, 000h
- dw 0E400h, 14, 26Ch, 000h, 000h, Typ_06, Typ_06
- dw 0E800h, 14, 26Dh, Typ_06, Typ_06, 000h, 000h
- dw 0EC00h, 14, 26Dh, 000h, 000h, Typ_06, Typ_06
- dw 0F000h, 14, 26Eh, Typ_06, Typ_06, 000h, 000h
- dw 0F400h, 14, 26Eh, 000h, 000h, Typ_06, Typ_06
- dw 0F800h, 14, 26Fh, Typ_06, Typ_06, 000h, 000h
- dw 0FC00h, 14, 26Fh, 000h, 000h, Typ_06, Typ_06
- Dw 00000h
+    dw 0C000h, 14, 268h, Typ_06, Typ_06, 000h, 000h
+    dw 0C400h, 14, 268h, 000h, 000h, Typ_06, Typ_06
+    dw 0C800h, 14, 269h, Typ_06, Typ_06, 000h, 000h
+    dw 0CC00h, 14, 269h, 000h, 000h, Typ_06, Typ_06
+    dw 0D000h, 14, 26Ah, Typ_06, Typ_06, 000h, 000h
+    dw 0D400h, 14, 26Ah, 000h, 000h, Typ_06, Typ_06
+    dw 0D800h, 14, 26Bh, Typ_06, Typ_06, 000h, 000h
+    dw 0DC00h, 14, 26Bh, 000h, 000h, Typ_06, Typ_06
+    dw 0E000h, 14, 26Ch, Typ_06, Typ_06, 000h, 000h
+    dw 0E400h, 14, 26Ch, 000h, 000h, Typ_06, Typ_06
+    dw 0E800h, 14, 26Dh, Typ_06, Typ_06, 000h, 000h
+    dw 0EC00h, 14, 26Dh, 000h, 000h, Typ_06, Typ_06
+    dw 0F000h, 14, 26Eh, Typ_06, Typ_06, 000h, 000h
+    dw 0F400h, 14, 26Eh, 000h, 000h, Typ_06, Typ_06
+    dw 0F800h, 14, 26Fh, Typ_06, Typ_06, 000h, 000h
+    dw 0FC00h, 14, 26Fh, 000h, 000h, Typ_06, Typ_06
+    dw 00000h                      ; End of list marker
 
 
-K7List:  ; MTRR-Register fr K7, K8
- dw 0C000h, 6, 268h
- dw 0C800h, 6, 269h
- dw 0D000h, 6, 26Ah
- dw 0D800h, 6, 26Bh
- dw 0E000h, 6, 26Ch
- dw 0E800h, 6, 26Dh
- dw 0F000h, 6, 26Eh
- dw 0F800h, 6, 26Fh
- Dw 00000h
+K7List:  ; MTRR-Register for K7, K8
+    dw 0C000h, 6, 268h
+    dw 0C800h, 6, 269h
+    dw 0D000h, 6, 26Ah
+    dw 0D800h, 6, 26Bh
+    dw 0E000h, 6, 26Ch
+    dw 0E800h, 6, 26Dh
+    dw 0F000h, 6, 26Eh
+    dw 0F800h, 6, 26Fh
+    dw 00000h                      ; End of list marker
+;------------------------------------------------------------------------------
 
 
-Set_PCI PROC NEAR                     ; SI=>Liste, BX= BUSDEV
-    mov   si,liste                    ; Register-Liste
+Set_PCI PROC NEAR                  ; SI=>Liste, BX= BUSDEV
+    mov   si,liste                 ; Register-Liste
 
 @Sloop:
     mov   ax,WORD PTR [si]
     or    ax,ax
     stc
-    jz    @fertig                     ; Exit mit Carry
+    jz    @fertig                  ; Exit mit Carry
     mov   dx,es
     cmp   dx,ax
     jz    @found
     add   si,WORD PTR [si + 2]
     jmp   @Sloop
 
- @found:
+@found:
     mov   ax,es
 
 ifdef DebugVersion
@@ -3373,7 +3392,7 @@ endif
     mov   ax,0B10Bh                ; write cfg
     int   1Ah
 
- @floop:
+@floop:
     add   si,4
     mov   ax,WORD PTR [si]         ; Register nach AX
     or    ax,ax
@@ -3487,7 +3506,7 @@ Set_PPro PROC NEAR
 Set_PPro ENDP
 
 
-;=====================================================
+;==============================================================================
 
 mtrr              db 'mtrr : $'
 strseg            db 'seg  : $'
@@ -3658,10 +3677,10 @@ K7_Close:
 Set_K7 ENDP
 
 
-;=====================================================
+;==============================================================================
 
-Found_Vendor_ID     dw 0;
-Found_Device_ID     dw 0;
+Found_Vendor_ID     dw 0000h       ;
+Found_Device_ID     dw 0000h       ;
 
 Init_Chipset PROC NEAR
     ;Get Vendor-ID Host-Bridge
@@ -3669,14 +3688,14 @@ Init_Chipset PROC NEAR
 ;    mov   bx,0                     ; Dev,Func,Bus=0
     xor   di,di                    ; Reg.0 = Vendor-ID
     xor   bx,bx                    ; Dev,Func,Bus=0
-    mov   ax,0B109h                ; ReadWord
+    mov   ax,0B109h                ; Read word
     int   1Ah
     mov   Found_Vendor_ID,cx
 
     ;Get Device-ID Host-Bridge
     mov   di,02h                   ; Reg.2 = Device-ID
     mov   bx,00h                   ; Dev,Func,Bus=0
-    mov   ax,0B109h                ; ReadWord
+    mov   ax,0B109h                ; Read word
     int   1Ah
     mov   Found_Device_ID,cx
 
@@ -3701,13 +3720,10 @@ ifdef DebugVersion
     push  cx
     mov   ax,dx
     call  Print_Hex_Value
-
     call  PrKomma
-
     pop   cx
     mov   ax,cx
     call  Print_Hex_Value
-
     mov   dx,OFFSET CR_LF$
     call  Do_Print_Str
     popf
@@ -3715,7 +3731,7 @@ ifdef DebugVersion
 endif
 
 Search_Device_0:
-    mov   ax,0B102h                ; find PCI device
+    mov   ax,0B102h                ; Find PCI device
     int   1Ah
     jc    Next_ID
     mov   Bus_Dev_0,bx
@@ -3733,8 +3749,8 @@ endif
 Search_Device_1:
     mov   cx,WORD PTR [di + 4]
     cmp   cx,0
-    jz    @SkipDev1
-    mov   ax,0B102h                ; find PCI device
+    jz    @Skip_Device_1
+    mov   ax,0B102h                ; Find PCI device
     int   1Ah
 
     ;jc    @NoSupportedChipset
@@ -3742,7 +3758,7 @@ Search_Device_1:
     mov   Bus_Dev_1,bx
     mov   Found_Chip,cx
 
-@SkipDev1:
+@Skip_Device_1:
     mov   ax,WORD PTR [di + 6]
     mov   Liste,ax
 
@@ -3754,18 +3770,18 @@ Search_Device_1:
    
     push  dx
 
-    add   di,12                    ; length of the chip register data
-    mov   dx,di                    ; chip name
+    add   di,12                    ; Length of the chip register data
+    mov   dx,di                    ; Chip name
     call  Do_Print_Str
 
-    mov   dx,OFFSET Found_String$  ; 'found' string
+    mov   dx,OFFSET Found_String$  ; Show 'found' string
     call  Print_String
 
 ;    pop dx
 ;    pushf
 
     cmp   Untested,0
-    jz    @IsTested
+    jz    @Is_Tested
 
     cmp   Untested,UNSUPPORTED_UNTESTED            ;1
     jz    @UnTested
@@ -3820,24 +3836,24 @@ Search_Device_1:
 ;    mov   ax,00h
     xor   ax,ax
     int   16h
-    cmp   al,27                    ; ESC ???
-    jnz   @IsTested
-    mov   dx,OFFSET Canceled$      ;Abgebrochen ausgeben
+    cmp   al,27                    ; ESC pressed ???
+    jnz   @Is_Tested
+    mov   dx,OFFSET Canceled$      ; Abgebrochen ausgeben
     jmp   @Init_Cancel
 
 
-@IsTested:
+@Is_Tested:
     pop   dx
     jmp   @Init_Exit
 
 
 @No_Supported_Chipset:
     push  dx
-    mov   dx,OFFSET NoIntel$
+    mov   dx,OFFSET NoIntel$       ; Message
     call  Print_String
-    call  @PrintDeviceIDs
+    call  @Print_Device_IDs
     pop   dx
-    stc                            ;Carry, da Fehler
+    stc                            ; Carry, da Fehler
     jmp   @Init_Exit
 
 
@@ -3867,11 +3883,11 @@ Test_K7_CPU PROC NEAR
     xor   eax,eax
     cpuid
     cmp   DWORD PTR amd_id_string,ebx
-    jne   no_amd_cpu
+    jne   No_AMD_CPU
     cmp   DWORD PTR amd_id_string[+4],edx
-    jne   no_amd_cpu
+    jne   No_AMD_CPU
     cmp   DWORD PTR amd_id_string[+8],ecx
-    jne   no_amd_cpu
+    jne   No_AMD_CPU
 
     ; eine AMD-CPU, jetzt die Model-Number testen
     ; erstmal sehen, ob das unterstuetzt wird...
@@ -3920,7 +3936,7 @@ Write_AMD_Unknown:
 
 AMD_K7_or_Higher:
     stc
-    jmp   @endeTestK7CPU
+    jmp   @End_Test_K7_CPU
 
 
 No_CPUID_Extended_Func:
@@ -3928,10 +3944,10 @@ No_AMD_CPU:
     ;mov   dx,OFFSET No_AMD_Found$
     ;call  Print_String
     clc
-    jmp   @endeTestK7CPU
+;    jmp   @End_Test_K7_CPU
 
 
-@endeTestK7CPU:
+@End_Test_K7_CPU:
     popa
     ret
 
@@ -3994,5 +4010,5 @@ Init_RAM_4KB PROC NEAR
 Init_RAM_4KB ENDP
 
 
-END  ;_start
+END
 
