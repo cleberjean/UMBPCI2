@@ -87,7 +87,7 @@ PIIX4_ID             equ 7110h     ; PIIX4, Function 0
 ;------------------------------------------------------------------------------
 ; Parameter Block for INIT
 ;------------------------------------------------------------------------------
-Init_Request STRUC
+INIT_REQUEST STRUC
     IR_Length        db ?          ; Total size of parameter block
     IR_Unit          db ?          ; not used
     IR_Function      db ?          ; Function $00, i.e. Init
@@ -98,12 +98,12 @@ Init_Request STRUC
     IR_ParamAddress  dd ?          ; Command line address (device=...)
     IR_DriveNumber   db ?          ; first unassigned drive letter
     IR_MessageFlag   db ?          ; Flag for error messages
-Init_Request ENDS
+INIT_REQUEST ENDS
 
-UMB_Entry STRUC
+UMB_ENTRY STRUC
     Start            dw ?          ; Start address (paragraphs)
     Len              dw ?          ; Length in paragraphs
-UMB_Entry ENDS
+UMB_ENTRY ENDS
 
 
 ;==============================================================================
@@ -115,23 +115,17 @@ UMB_Entry ENDS
 ;------------------------------------------------------------------------------
 ; Device Driver Header (Must be at offset 0)
 ;------------------------------------------------------------------------------
-Next_Driver          dd -1               ; Address of next driver (FFFF:FFFF)
-Driver_Attributes    dw 0E000h           ; Driver Attributes
-Strategy_Pointer     dw OFFSET Strategy  ; Offset of "Strategy" routine
-Interrupt_Pointer    dw OFFSET Interrupt ; Offset of "Interrupt" routine
-Driver_Name          db 'UMBPCIXX'       ; Name (or units)
+Next_Driver   dd -1                        ; Address of next driver (FFFF:FFFF)
+Attributes    dw 0E000h                    ; Driver Attributes
+Strategy      dw OFFSET Strategy_Routine   ; Offset of "Strategy" routine
+Interrupt     dw OFFSET Interrupt_Routine  ; Offset of "Interrupt" routine
+Driver_Name   db 'UMBPCIXX'                ; Name (or units)
 
 
 ;------------------------------------------------------------------------------
 ; List of UMBs Addresses Found and Available
 ;------------------------------------------------------------------------------
 UMBs_List            dw 22 dup(0)        ; Maximum of 10 entries (UMBs)
-
-
-;------------------------------------------------------------------------------
-; Original HIMEM.SYS Chain (Changed on loading to support the UMBPCI)
-;------------------------------------------------------------------------------
-XMS_Orginal_Jmp      dd ?                ; HIMEM original value
 
 
 ;==============================================================================
@@ -197,8 +191,10 @@ UMB_Done:
 UMB_Request ENDP
 
 
-; HIMEM.SYS chain
-;XMS_Orginal_Jmp  dd ?              ; HIMEM original value
+;------------------------------------------------------------------------------
+; Original HIMEM.SYS Chain (Changed on loading to support the UMBPCI)
+;------------------------------------------------------------------------------
+XMS_Orginal_Jmp      dd ?          ; HIMEM original address
 
 
 New_Chain:
@@ -258,65 +254,65 @@ MSR_CONTROL                   equ 02FFh
 ;=========================================
 ; Buffers for Non Resident Code
 ;=========================================
-Hex_Digits   db '0123456789ABCDEF' ; Ausgabe einer Hex-Zahl mit vier Stellen (AX)
-CR_LF_$      db 13,10,'$'          ; CRLF also marks the end of the resident part!
+Hex_Digits     db '0123456789ABCDEF' ; Ausgabe einer Hex-Zahl mit vier Stellen (AX)
+CR_LF_$        db 13,10,'$'          ; CRLF also marks the end of the resident part!
 
-SkipUkcMsg   dw 0
-Skip_K7_Test dw 0                  ;  '/7' command line param (Ninho)
+SkipUkcMsg     dw 0
+Skip_K7_Test   dw 0                  ;  '/7' command line param (Ninho)
 
-Liste        dw 0
-Bus_Dev_0    dw 0
-Bus_Dev_1    dw 0
+Liste          dw 0
+Bus_Dev_0      dw 0
+Bus_Dev_1      dw 0
 
-Found_Chip   dw 0
-PPro_Found   dw 0
-K7_Found     dw 0
-Untested     dw 0
+Found_Chip     dw 0
+PPro_Found     dw 0
+K7_Found       dw 0
+Untested       dw 0
 
-ParamError   dw 0
+Param_Error    dw 0
 
-MTRRdeftype  dd 0
-Dummy        dd 0
-MTRRnum      dd 0
-MTRRvalLo    dd 0
-MTRRvalHi    dd 0
+MTRR_Def_Type  dd 0
+Dummy          dd 0
+MTRR_Number    dd 0
+MTRR_Val_Lo    dd 0
+MTRR_Val_Hi    dd 0
 
-BlockSize    dw 400h               ; default 16K blocks
-BlockSizeShr db 10                 ; shr by 10 bits for 16K, 8 for 4K blocks
+Block_Size     dw 400h               ; default 16K blocks
+BlockSizeShR   db 10                 ; shr by 10 bits for 16K, 8 for 4K blocks
 
-;Fill_1       db '--------------'
-;Fill_2       db '--------------'
+;Fill_1         db '--------------'
+;Fill_2         db '--------------'
 
-Comma_$      db ', ','$'
-Dash_Char_$  db '-$'
+Comma_$        db ', ','$'
+Dash_Char_$    db '-$'
 
-;AXstr        db 'AX:$'
-;BXstr        db 'BX:$'
-;CXstr        db 'CX:$'
-;DXstr        db 'DX:$'
+;AXstr          db 'AX:$'
+;BXstr          db 'BX:$'
+;CXstr          db 'CX:$'
+;DXstr          db 'DX:$'
 
 ifdef K7DebugVersion
-  readstr    db 'read : $'
-  writestr   db 'write: $'
+  readstr      db 'read : $'
+  writestr     db 'write: $'
 endif
 
-Param_Addr   dd ?                  ; Buffer for INIT parameter block
+Param_Addr     dd ?                  ; Buffer for INIT parameter block
 
-initOnly     db 0
+initOnly       db 0
 
 
 ;==============================================================================
 ; Strategy Routine, saves ES:BX (Parameter Block Address)
 ;==============================================================================
-Strategy PROC FAR
+Strategy_Routine PROC FAR
     mov   WORD PTR [Param_Addr],bx
     mov   WORD PTR [Param_Addr + 2],es
     retf
-Strategy ENDP
+Strategy_Routine ENDP
 
 
 ;== Apr/08/2004 Nagatoshi Uehara ==;
-	    dw  95 dup (0)
+        dw  95 dup (0)
 Loc_Stack   dw  0                  ; Stack Size = 192 byte
 Sav_Stack   dw  0, 0
 ;==================================;
@@ -325,7 +321,7 @@ Sav_Stack   dw  0, 0
 ;==============================================================================
 ; Interrupt Routine, defines only the INIT function
 ;==============================================================================
-Interrupt PROC FAR
+Interrupt_Routine PROC FAR
 
 ifdef DebugVersion
     int   03h                      ; DEBUG TRAP (Ninho)
@@ -368,7 +364,8 @@ Other_Cmd:
 ;================================================
 
     retf
-Interrupt ENDP
+
+Interrupt_Routine ENDP
 
 
 ;==============================================================================
@@ -490,21 +487,22 @@ Error_Out ENDP
 
 ;------------------------------------------------------------------------
 Pre_Init_Function PROC NEAR
-    ;Is PCI BIOS present?
-    mov   ax,0B101h
-    int   1Ah
-    jc    No_PCI                   ; PCI Bios not present
-    cmp   ah,0
-    jnz   No_PCI                   ; PCI Bios not present
-    cmp   dx,4350h
-    jz    @PCI_Found               ; PCI BIOS is present, so continue
+;    mov   ax,0B101h                ; Check PCI BIOS presence
+;    int   1Ah
+;    jc    @PIF_No_PCI_BIOS         ; PCI Bios not present (PIF stands for Pre_Initi_Function)
+;    cmp   ah,0
+;    jne   @PIF_No_PCI_BIOS         ; PCI Bios not present (PIF stands for Pre_Initi_Function)
+;    cmp   dx,4350h
+;    je    @PIF_PCI_BIOS_Found      ; PCI BIOS is present, so continue (PIF stands for Pre_Initi_Function)
+    call  Check_PCI_BIOS           ; Check if a PCI BIOS is present
+    jnc   @PIF_PCI_BIOS_Found      ; Yes (Carry flag = 0)
 
-No_PCI:
+;@PIF_No_PCI_BIOS:
     mov   dx,OFFSET NoPCI$         ; No PCI message
-    stc                            ; Fail flag (Carry = 1)
-    ret                            ; No PCI -> abort
+;    stc                            ; Fail flag (Carry = 1) *Carry Flag returnd set by the Check_PCI_BIOS routine
+    ret                            ; No PCI BIOS -> abort
 
-@PCI_Found:
+@PIF_PCI_BIOS_Found:
 ;Test special Chipsets
 
 @No_VIA_CX700:
@@ -513,8 +511,8 @@ No_PCI:
 
 Test_K7:
     ;----------------------------------------------------------
-    ; First look for an Intel chipset; if found, it cannot be
-    ; an AMD K7, even if one is present -> VMware.
+    ; First let's look for an Intel chipset; if found, it
+    ; cannot be an AMD K7, even if one is present -> VMware.
     ;----------------------------------------------------------
     mov   ax,0B109h                ; Read_Config_Word
 ;    mov   bx,0                     ; bus=0, dev=0, fuc=0
@@ -522,8 +520,7 @@ Test_K7:
     xor   bx,bx                    ; bus=0, dev=0, fuc=0
     xor   di,di                    ; reg=0 -> vendor ID
     int   1Ah
-;    cmp   cx,8086h                 ; Intel vendor ID
-    cmp   cx,INTEL_ID              ; Intel vendor ID
+    cmp   cx,8086h                 ; Intel vendor ID
     jz    No_K7_CPU
 
     ;kein Intel Chipsatz -> nach AMD K7 CPU suchen,
@@ -533,13 +530,15 @@ Test_K7:
     call  Test_K7_CPU
     jnc   No_K7_CPU
     mov   K7_Found,1
-    mov   BlockSize,100h
-    mov   BlockSizeShr,8
+    mov   Block_Size,100h
+    mov   BlockSizeShR,8
 
 No_K7_CPU:
 
 
-; HIMEM Installed?
+;------------------------------------------------------------------------------
+; HIMEM is Installed?
+;------------------------------------------------------------------------------
 Check_HIMEM:
     mov   ax,4300h                  ; Check whether HIMEM is installed
     int   2Fh
@@ -552,7 +551,9 @@ Check_HIMEM:
     ret                            ; Continue without HIMEM
 
 
-; Determine chain
+;------------------------------------------------------------------------------
+; Determine Chain
+;------------------------------------------------------------------------------
 Get_XMS_Call:
     mov   ax,4310h                 ; HIMEM: Entry address
     int   2Fh
@@ -637,24 +638,24 @@ Cmd_Line:
     les   di,[Param_Addr]               ; Parameter block
     les   di,es:[di + IR_ParamAddress]  ; ES:DI points to the command line
     call  Set_List                      ; Parse the command line and set the list
-    jnc   Test_UMAs                    ; -> OK
+    jnc   Test_Areas                    ; -> OK
 
-    cmp   ParamError,1
+    cmp   Param_Error,1
     jnz   No_Param_Error
     mov   dx,OFFSET BadCmd$
     jmp   Error_Out                    ; Output the command line
 
 No_Param_Error:
-    call  Scan_UMAs                    ; Find Upper Memory Areas automatically
-    jnc   Test_UMAs                    ; -> OK
+    call  Scan_Areas                   ; Search for Areas automatically
+    jnc   Test_Areas                   ; -> OK
     mov   dx,OFFSET NoFreeBlock$       ; Message
     jmp   Error_Out
 
 
 s    dw 0
-;d1 db "Block Start$"
-;d2 db "Block Ende$"
-;d3 db "Back from Test$"
+;d1   db "Block Start$"
+;d2   db "Block Ende$"
+;d3   db "Back from Test$"
 
 
 ; Input: Start in AX, Return: Length in CX
@@ -673,7 +674,7 @@ Test_Block:
     ;popa
 
     mov   s,ax                     ; Save start
-    dec   ax                       ; Decrement once for the first inc...
+    dec   ax                       ; Decrement once time for the first inc...
     mov   es,ax
 
 @Next_Word:
@@ -688,10 +689,10 @@ Test_Block:
     jz    @Next_Word
 
 @Diff_Found:
-    ; Difference found -> end of block
+    ;Difference found -> end of block
     mov   ax,es                    ; Current address
     push  bx
-    mov   bx,BlockSize
+    mov   bx,Block_Size
     xor   dx,dx                    ; clears DX before division
     div   bx
     mul   bx                       ; Round down to the nearest 4K or 16K boundary
@@ -700,21 +701,21 @@ Test_Block:
 ;    mov   cx,0
     xor   cx,cx
     cmp   ax,s
-    jz    @EndeTestBlock           ; Exit with CX = 0
+    jz    @End_Test_Block          ; Exit with CX = 0
     mov   cx,ax
     sub   cx,s                     ; Length = address - start
 
-@EndeTestBlock:
+@End_Test_Block:
     pop   es
     pop   ds
     pop   ax
     ret
 
 
-Test_UMAs:
+Test_Areas:
     ;AMD K7/K8 work without a chipset :-)
     cmp   K7_Found,1
-    jz    Test_All_UMB_Blocks
+    je    Test_All_UMB_Blocks
 
 
 No_K7_CPU2:
@@ -736,11 +737,11 @@ endif
     
     lodsw                          ; Start address
     or    ax,ax                    ; End of list reached?
-    jz    UMAs_Tested              ; Yes. Then done
+    jz    Areas_Tested              ; Yes. Then done
 
     mov   es,ax                    ; Start address in ES
     lodsw                          ; Size (paragraphs)
-    mov   cl,BlockSizeShr          ; Convert to 16K/4K blocks
+    mov   cl,BlockSizeShR          ; Convert to 16K/4K blocks
     shr   ax,cl                    ; => Number of 16K/4K blocks
 
 ifdef K7DebugVersion
@@ -752,7 +753,7 @@ endif
 
 Test_Blocks:
     cmp   K7_Found,0
-    jz    Skip_Set_K7
+    je    Skip_Set_K7
     xor   di,di
     call  Set_K7                   ; Segment ES, enable 16K
     call  Init_RAM_4KB
@@ -774,9 +775,9 @@ Test_Current_Block:
     loop  $                        ; operation should fail
     cmp   es:[di],dx               ; Do we have a constant value?
     mov   es:[di],bx               ; Restore old contents
-    jnz   No_RAM                   ; -> No RAM at this location!
+    jne   No_RAM                   ; -> No RAM at this location!
     cmp   PPro_Found,0             ; PPro?
-    jz    Skip_PPro
+    je    Skip_PPro
     pusha
     call  Set_PPro                 ; Segment ES, enable 16K
     popa
@@ -785,7 +786,7 @@ Skip_PPro:
     dec   ax
     jz    Next_UMB                 ; -> Next UMB area
     mov   di,es
-    add   di,BlockSize             ; Otherwise, advance ES by 16K
+    add   di,Block_Size            ; Otherwise, advance ES by 16K
     mov   es,di
     jmp   Test_Blocks              ; And back to test the next 4K or 16K block
 
@@ -799,22 +800,23 @@ No_RAM:
     call  Do_Print_Str             ; Output without CRLF
     pop   ax
     call  Print_Hex_Value          ; Show segment address
+;    call  Print_Space              ; Adds a space
     mov   dx,OFFSET RAMFail2$
     jmp   Error_Out
 
 
 Chipset_Error:
-    mov dx,OFFSET SetErr$
-    jmp Error_Out
+    mov   dx,OFFSET SetErr$
+    jmp   Error_Out
 
 
 ;------------------------------------------------------------------------------
 ; After a successful RAM test, the execution continues here by inserting our
 ; own "hook" into the HIMEM.SYS jump chain.
 ;------------------------------------------------------------------------------
-UMAs_Tested:
+Areas_Tested:
     cmp   initOnly,1
-    jnz   InstHimemExt
+    jne   InstHimemExt
     mov   dx,OFFSET Initialized$   ; Initialized only
     call  Print_String
 
@@ -839,12 +841,13 @@ UMAs_Tested:
     rep   movsw
     mov   ax,0AB5Fh                ; Set ending signature bytes.
     stosw
+    sti                            ; Acho que faltou! (CJB)
 ;* End patch by Jack Ellis
 ;------------------------------------------------------------
 ;------------------------------------------------------------
 ;------------------------------------------------------------
 
-    jmp   Release                  ;##### ENDE
+    jmp   Release                  ;##### END
 
 
 InstHimemExt:
@@ -853,20 +856,20 @@ InstHimemExt:
 Scan_Hooks:
     mov   al,BYTE PTR es:[di]
     cmp   al,0EBh                    ; JMP SHORT?
-    jz    Hook_Found                 ; OK - momentanes Kettenende
+    je    Hook_Found                 ; OK - momentanes Kettenende
     les   di,DWORD PTR es:[di + 1]   ; sonst n„chstes Element
     cmp   al,0EAh                    ; war das berhaupt ein JMP FAR?
-    jz    Scan_Hooks
+    je    Scan_Hooks
     mov   dx,OFFSET HookErr$         ; Hook-Kette besch„digt
     jmp   Error_Out
 
 
 Hook_Found:
-    cli                                          ; *keine* St”rungen hier, bitte!
-    dec   Byte Ptr es:[di]                       ; JMP SHORT -> JMP FAR
-    mov   WORD PTR es:[di + 1],OFFSET New_Chain  ; eigene Routine
-    mov   WORD PTR es:[di + 3],cs                ; einsetzen
-    add   di,5                                   ; echte Originaladresse (hinter den NOPS)
+    cli                                          ; No interruptions here, please!
+    dec   BYTE PTR es:[di]                       ; JMP SHORT -> JMP FAR
+    mov   WORD PTR es:[di + 1],OFFSET New_Chain  ; Insert our own routine
+    mov   WORD PTR es:[di + 3],cs                ; Set segment
+    add   di,5                                   ; Actual original address (after the NOPs)
     mov   WORD PTR [XMS_Orginal_Jmp],di
     mov   WORD PTR [XMS_Orginal_Jmp + 2],es
     sti
@@ -874,7 +877,7 @@ Hook_Found:
 Show_Installation:
     mov   dx,OFFSET Installed$       ; Message
     call  Print_String
-    mov   ax,0100h                   ; Initialisierung fehlerfrei
+    mov   ax,0100h                   ; Initialization completed successfully
 
 Init_End:
     pop   ds
@@ -889,16 +892,16 @@ Init_Function ENDP
 
 
 ;------------------------------------------------------------------------------
-; Search for Free UMAs, Return with UMBs_List Filled and Carry Set or Cleared
+; Search for Free Areas, Return with UMBs_List Filled and Carry Set or Cleared
 ;------------------------------------------------------------------------------
-Scan_UMAs PROC NEAR
-    xor   bx,bx                            ; Index in UMBList
+Scan_Areas PROC NEAR
+    xor   bx,bx                            ; Initialize UMB_List index
     mov   ax,0C000h                        ; First block
 
-@NextBl:
+@@SA_Next_Block:
     call  Test_Block
     cmp   cx,0
-    jz    @Skip_Range_Msg
+    je    @@Skip_Range_Msg
     pusha
     mov   bx,ax
     add   bx,cx
@@ -916,22 +919,22 @@ Scan_UMAs PROC NEAR
     call  Print_CRLF
     popa
 
-@Skip_Range_Msg:
+@@Skip_Range_Msg:
     cmp   cx,0                             ; Length zero?
-    jnz   @Add2List
-    add   ax,BlockSize
+    jne   @@Add2List
+    add   ax,Block_Size
     cmp   ax,0F000h
-    jb    @NextBl
-    jmp   ListSet2                         ; That's it, exit
+    jb    @@SA_Next_Block
+    jmp   List_Set_2                       ; That's it, exit
 
 
-@Add2List:
+@@Add2List:
 ;    call  Here_MSG
     mov   WORD PTR[UMBs_List + bx],ax      ; Entry start address
-    mov   WORD PTR[UMBs_List + bx +2 ],cx  ; Block length
+    mov   WORD PTR[UMBs_List + bx + 2],cx  ; Block length
 
     add   ax,cx                            ; Continue searching beyond the
-					   ; end of the block
+                                           ; end of the block
 ;    pusha
 ;    call  Print_Hex_Value
 ;    call  Print_Comma
@@ -941,22 +944,22 @@ Scan_UMAs PROC NEAR
     add   bx,4
     cmp   bx,40                            ; More than 10 entries?
 ;    cmp   bx,16                           ; More than 4 entries?
-    jnb   ListSet2
-    cmp   ax,0f000h
-    jb    @NextBl
-    jmp   ListSet2
+    jnb   List_Set_2
+    cmp   ax,0F000h
+    jb    @@SA_Next_Block
+    jmp   List_Set_2
 
 
-ListErr2: 
-    stc
+;List_Error_2:
+;    stc
+;    ret
+
+
+List_Set_2:
+    sub   bx,1                             ; Set Carry if BX = 0
     ret
 
-
-ListSet2: 
-    sub   bx,1                     ; Set Carry if BX = 0
-    ret
-
-Scan_UMAs ENDP
+Scan_Areas ENDP
 ;--------------------------------------------------------------------------
 
 
@@ -973,24 +976,24 @@ Scan_UMAs ENDP
 ifdef EnglVersion
   Copyright$       db 'UMBPCI c''t 11/95 - Siering/Sch„pers/Stiller$'
   Changed$         db ''
-		   db VERSION_STRING, ' - Support for new Chipsets and CPUs - Uwe Sieber ', DATE_STRING,'$'
+                   db VERSION_STRING, ' - Support for new Chipsets and CPUs - Uwe Sieber ', DATE_STRING,'$'
   NoXMS$           db 'No XMS-driver found!$'
   UMBPresent$      db 'UMB-server already installed!',13,10
-		   db 'Installation stopped!',13,10,'$'
+                   db 'Installation stopped!',13,10,'$'
   NoFreeBlock$     db 'No unused memory block found',13,10,'$'
   BadCmd$          db ''
-		   db 'Problem with range parameters in CONFIG.SYS!',13,10
-		   db 'Format: DEVICE=UMBPCI.SYS /I=aaaa-bbbb /I=cccc-dddd',13,10
-		   db 'Supported range is C800-EFFF',13,10
-		   db 'Only whole 16K-Blocks are allowed e.g. /I=c800-cbff or /I=c800-efff',13,10,'$'
-		   db 'On AMD K7/K8 4K-Blocks are allowed e.g. /I=c900-ccff or /I=c800-efff',13,10,'$'
-		   db 'Loaded without any parameters UMBPCI searches and uses all free ranges$'
+                   db 'Problem with range parameters in CONFIG.SYS!',13,10
+                   db 'Format: DEVICE=UMBPCI.SYS /I=aaaa-bbbb /I=cccc-dddd',13,10
+                   db 'Supported range is C800-EFFF',13,10
+                   db 'Only whole 16K-Blocks are allowed e.g. /I=c800-cbff or /I=c800-efff',13,10,'$'
+                   db 'On AMD K7/K8 4K-Blocks are allowed e.g. /I=c900-ccff or /I=c800-efff',13,10,'$'
+                   db 'Loaded without any parameters UMBPCI searches and uses all free ranges$'
   RAMFail1$        db 13,10,'No RAM found at segment (hex) $'
   RAMFail2$        db ' - Installation Stopped -$'
   HookErr$         db 'Hook-Chain of HIMEM.SYS unknown!$'
   Installed$       db 'Program installed.$'
   NoPCI$           db 'UMBPCI creates UMBs on PCI chipsets (that''s where the name comes from).',13,10
-		   db 'This computer has no PCI chipset!$'
+                   db 'This computer has no PCI chipset!$'
   SetErr$          db 'Problem programming PCI-chipset!$'
   SkipK7Msg$       db 'AMD K7 detection will be skipped!',13,10,'$' ; (Ninho)
   PressKey$        db 'press any key...$'
@@ -1008,12 +1011,12 @@ ifdef EnglVersion
   iErr$            db 'Internal Error :-($'
   Initialized$     db 'No loaded HIMEM found, Upper Memory activated only$'
   Untested$        db ''
-		   db 'This chipset is untested! Mail me the name of the chipset and if it works',13,10
-		   db 'so I can either remove this break or list it as not working:',13,10
-		   db 'mail@uwe-sieber.de',13,10
-		   db 'Try a bit around with pure DOS (a good test is to load high DOSKEY) and backup ',13,10
-		   db 'your harddisk before you boot into Win9x GUI - I doensn''t warrenty anything!',13,10
-		   db 'Press ESC to skip UMBPCI or another key to proceed loading!',13,10,'$'
+                   db 'This chipset is untested! Mail me the name of the chipset and if it works',13,10
+                   db 'so I can either remove this break or list it as not working:',13,10
+                   db 'mail@uwe-sieber.de',13,10
+                   db 'Try a bit around with pure DOS (a good test is to load high DOSKEY) and backup ',13,10
+                   db 'your harddisk before you boot into Win9x GUI - I doensn''t warrenty anything!',13,10
+                   db 'Press ESC to skip UMBPCI or another key to proceed loading!',13,10,'$'
   Canceled$        db 'Installation canceled!',13,10,'$'
   SpaceE$          db '                '
   InternalThanks   db '   Thanks to Uwe Milde (PPro Support), Sergei Shtylyov and Serg Svetlov (K7 support)   '
@@ -1021,24 +1024,24 @@ ifdef EnglVersion
 elseifdef PTBR
   Copyright$       db 'UMBPCI c''t 11/95 - Siering/Schäpers/Stiller$'
   Changed$         db ''
-		   db VERSION_STRING, ' - Suporte para novos Chipsets e CPUs - Uwe Sieber ', DATE_STRING,13,10,'$'
+                   db VERSION_STRING, ' - Suporte para Novos Chipsets e CPUs - Uwe Sieber ', DATE_STRING,13,10,'$'
   NoXMS$           db 'Nenhum driver XMS encontrado!$'
   UMBPresent$      db 'Instala‡„o Interrompida!',13,10
-		   db 'Servidor UMB j  instalado.',13,10,'$'
+                   db 'Servidor UMB j  instalado.',13,10,'$'
   NoFreeBlock$     db 'N„o foi encontrado nenhum bloco de mem¢ria sem uso.',13,10,'$'
   BadCmd$          db ''
-		   db 'Erro com os parƒmetros de faixa no arquivo CONFIG.SYS!',13,10
-		   db 'Sintaxe: DEVICE=UMBPCI.SYS /I=aaaa-bbbb /I=cccc-dddd',13,10
-		   db 'A faixa suportada ‚ C800-EFFF.',13,10
-		   db 'Somente blocos inteiros de 16K s„o permitidos, por exemplo: /I=C800-CBFF ou /I=C800-EFFF',13,10,'$'
-		   db 'Blocos de 4K s„o permitidos nos AMD K7/K8, por exemplo: /I=C900-CCFF ou /I=C800-EFFF',13,10,'$'
-		   db 'Se o UMBPCI ‚ chamado sem nenhum parƒmetro, ele busca e usa toda a faixa livre da mem¢ria superior.$'
+                   db 'Erro com os parƒmetros de faixa no arquivo CONFIG.SYS!',13,10
+                   db 'Sintaxe: DEVICE=UMBPCI.SYS /I=aaaa-bbbb /I=cccc-dddd',13,10
+                   db 'A faixa suportada ‚ C800-EFFF.',13,10
+                   db 'Somente blocos inteiros de 16K s„o permitidos, por exemplo: /I=C800-CBFF ou /I=C800-EFFF',13,10,'$'
+                   db 'Blocos de 4K s„o permitidos nos AMD K7/K8, por exemplo: /I=C900-CCFF ou /I=C800-EFFF',13,10,'$'
+                   db 'Se o UMBPCI ‚ chamado sem nenhum parƒmetro, ele busca e usa toda a faixa livre da mem¢ria superior.$'
   RAMFail1$        db 'Nenhuma RAM dispon¡vel no segmento (hex) $'
-  RAMFail2$        db ' ** Instala‡„o Interrompida **$'
+  RAMFail2$        db '  ** Instala‡„o Interrompida **$'
   HookErr$         db 'Hook-Chain of HIMEM.SYS unknown!$'
   Installed$       db 'UMBPCI instalado.',13,10,'$'
   NoPCI$           db 'O UMBPCI cria UMBs em chipsets PCI (que ‚ de onde origina o nome ;-).',13,10
-		   db 'Este computador n„o tem um chipset PCI!$'
+                   db 'Este computador n„o tem um chipset PCI!$'
   SetErr$          db 'Um erro ocorreu ao tentar programar o chipset PCI!$'
   SkipK7Msg$       db 'A detec‡„o de AMD K7 ser  ignorada!',13,10,'$' ; (Ninho)
   PressKey$        db 0Dh, 0Ah, 'Pressione uma tecla para continuar...', 0Dh, 0Ah, '$'
@@ -1056,12 +1059,12 @@ elseifdef PTBR
   iErr$            db 'Erro Interno :-($'
   Initialized$     db 'HIMEM.SYS n„o carregado. Somente Mem¢ria Superior ativada.$'
   Untested$        db ''
-		   db 'Este Chipset N„o Foi Testado! Mail me the name of the chipset and if it works',13,10
-		   db 'so I can either remove this break or list it as not working:',13,10
-		   db 'mail@uwe-sieber.de',13,10
-		   db 'Try a bit around with pure DOS (a good test is to load high DOSKEY) and backup ',13,10
-		   db 'your harddisk before you boot into Win9x GUI - I doensn''t warrenty anything!',13,10
-		   db 'Pressione ESC para pular o UMBPCI ou qualquer outra tecla para continuar carregando!',13,10,'$'
+                   db 'Este Chipset N„o Foi Testado! Mail me the name of the chipset and if it works',13,10
+                   db 'so I can either remove this break or list it as not working:',13,10
+                   db 'mail@uwe-sieber.de',13,10
+                   db 'Try a bit around with pure DOS (a good test is to load high DOSKEY) and backup ',13,10
+                   db 'your harddisk before you boot into Win9x GUI - I doensn''t warrenty anything!',13,10
+                   db 'Pressione ESC para pular o UMBPCI ou qualquer outra tecla para continuar carregando!',13,10,'$'
   Canceled$        db 'Instala‡„o Cancelada!',13,10,'$'
   SpaceE$          db '                '
   InternalThanks   db '   Obrigado a Uwe Milde (Suporte ao PPro), Sergei Shtylyov e Serg Svetlov (Suporte ao K7)   '
@@ -1069,24 +1072,24 @@ elseifdef PTBR
 else
   Copyright$       db 'UMBPCI c''t 11/95 - Siering/Sch„pers/Stiller$'
   Changed$         db ''
-		   db VERSION_STRING, ' - Support fr neue Chips„tze und CPUs - Uwe Sieber ', DATE_STRING,'$'
+                   db VERSION_STRING, ' - Support fr neue Chips„tze und CPUs - Uwe Sieber ', DATE_STRING,'$'
   NoXMS$           db 'Kein XMS-Treiber vorhanden!$'
   UMBPresent$      db 'UMB Server bereits installiert!',13,10
-		   db 'Installation abgebrochen!',13,10,'$'
+                   db 'Installation abgebrochen!',13,10,'$'
   NoFreeBlock$     db 'Keinen unbenutzen Speicher-Block gefunden',13,10,'$'
   BadCmd$          db ''
-		   db 'Probleme mit den Bereichsangaben in CONFIG.SYS!',13,10
-		   db 'Format: DEVICE=UMBPCI.SYS /I=aaaa-bbbb /I=cccc-dddd',13,10
-		   db 'Nur der Bereich C800-EFFF wird untersttzt',13,10
-		   db 'Nur ganze 16K-Bl”cke sind erlaubt, z.B. /I=c800-cfff oder /I=c800-efff',13,10,'$'
-		   db 'Auf AMD K7/K8 sind 4K-Bl”cke erlaubt, z.B. /I=c900-ceff oder /I=c800-efff',13,10,'$'
-		   db 'Ohne Parameter geladen, werden alle freien Bereiche gesucht und benutzt$'
+                   db 'Probleme mit den Bereichsangaben in CONFIG.SYS!',13,10
+                   db 'Format: DEVICE=UMBPCI.SYS /I=aaaa-bbbb /I=cccc-dddd',13,10
+                   db 'Nur der Bereich C800-EFFF wird untersttzt',13,10
+                   db 'Nur ganze 16K-Bl”cke sind erlaubt, z.B. /I=c800-cfff oder /I=c800-efff',13,10,'$'
+                   db 'Auf AMD K7/K8 sind 4K-Bl”cke erlaubt, z.B. /I=c900-ceff oder /I=c800-efff',13,10,'$'
+                   db 'Ohne Parameter geladen, werden alle freien Bereiche gesucht und benutzt$'
   RAMFail1$        db 13,10,'Kein RAM im Segment (hex) $'
   RAMFail2$        db ' - Installation abgebrochen -$'
   HookErr$         db 'Hook-Chain von HIMEM.SYS besch„digt bzw. unbekannt !$'
   Installed$       db 'Programm installiert$'
   NoPCI$           db 'UMBPCI erzeugt UMBs auf PCI-Chips„tzen (daher der Name...).',13,10
-		   db 'Dieser Computer hat keinen PCI-Chipsatz!$'
+                   db 'Dieser Computer hat keinen PCI-Chipsatz!$'
   SetErr$          db 'Problem mit PCI-Chipsatz-Programmierung!$'
   SkipK7Msg$       db 'AMD K7 Erkennung deaktiviert',13,10,'$';
   PressKey$        db 'beliebige Taste drcken...$'
@@ -1094,7 +1097,7 @@ else
   Unsupp3$         db 'Dieser Chipsatz wird nicht untersttzt, da er kein Shadow RAM besitzt$'
   Unsupp4$         db 'Der Konfigurationsmechanismus dieses Chipsatzes wird nicht untersttzt.$'
   Unsupp5$         db 'Dieser Chipsatz wird nicht untersttzt, da sein Shadow-RAM nicht',13,10
-		   db 'wie im Datenblatt beschrieben funktioniert.$'
+                   db 'wie im Datenblatt beschrieben funktioniert.$'
   Unsupp6$         db 'Dieser Chipsatz hat keine Hostbridge als device 0 auf bus 0',13,10,'$'
   NoIntel$         db 'Der Chipsatz ist unbekannt!',13,10
 ;                   db 'Bitte berprfen Sie auf http://www.uwe-sieber.de/umbpci.html, ob',13,10
@@ -1105,13 +1108,13 @@ else
   iErr$            db 'Interner Fehler :-($'
   Initialized$     db 'Kein geladenen HIMEM gefunden, UMB-Speicher nur aktiviert$'
   Untested$        db ''
-		   db 'Dieser Chipsatz ist ungetestet. Bitte mailen Sie mir den Namen des Chipsatzes',13,10
-		   db 'und ob es funktioniert, damit ich ggf. diese Pause entfernen kann:',13,10
-		   db 'mail@uwe-sieber.de',13,10
-		   db 'Testen Sie erst, ob es im puren DOS funktioniert bevor Sie Win9x GUI hochfahren',13,10
-		   db '(das Hochladen von DOSKEY ist ein guter Test) und machen Sie vorher ein',13,10
-		   db 'Backup - ich garantiere fr nichts!',13,13,10
-		   db 'Drcken Sie "Esc" um abzubrechen oder eine andere Taste um fortzufahren!',13,10,'$'
+                   db 'Dieser Chipsatz ist ungetestet. Bitte mailen Sie mir den Namen des Chipsatzes',13,10
+                   db 'und ob es funktioniert, damit ich ggf. diese Pause entfernen kann:',13,10
+                   db 'mail@uwe-sieber.de',13,10
+                   db 'Testen Sie erst, ob es im puren DOS funktioniert bevor Sie Win9x GUI hochfahren',13,10
+                   db '(das Hochladen von DOSKEY ist ein guter Test) und machen Sie vorher ein',13,10
+                   db 'Backup - ich garantiere fr nichts!',13,13,10
+                   db 'Drcken Sie "Esc" um abzubrechen oder eine andere Taste um fortzufahren!',13,10,'$'
   Canceled$        db 'Installation abgebrochen!',13,10,'$'
   Space$           db '                '
   InternalThanks   db '   Dank an Uwe Milde (PPro Support), sowie Sergei Shtylyov und Serg Svetlov (K7-Support)   '
@@ -1131,40 +1134,40 @@ ifdef DebugVersion2
 endif
 
 
-; Aufruf mit ES:DI als Index in die Kommandozeile
-; zurck mit DI+4, Wert bzw. 0 in DX und geloeschtem/gesetzten Z-Flag
+; Called with ES:DI pointing into the command line
+; Returns with DI+4, value or 0 in DX, and Z flag cleared/set
 Hex_To_Val:
     push  cx
-    mov   cx,0404h                 ; Zaehler, Shift-Zaehler
-    xor   dx,dx                    ; Wert
+    mov   cx,0404h                 ; Counter, shift counter
+    xor   dx,dx                    ; Value
 
 Do_Digit:
-    shl   dx,cl                    ; eine Stelle nach links
-    mov   al,es:[di]               ; ein Zeichen
+    shl   dx,cl                    ; One position to the left
+    mov   al,es:[di]               ; Gets one character
     inc   di
     cmp   al,'9'
     jbe   Is_Digit
     and   al,0DFh                  ; Turn char upper case
     cmp   al,'A'
-    jb    No_Char                  ; Fehler
+    jb    No_Char                  ; Error. Not an hexadecimal value character
     cmp   al,'F'
-    ja    No_Char                  ; dito
+    ja    No_Char                  ; Error. Not an hexadecimal value character
     sub   al,55                    ; 'A'..'F' -> 10..16
-    jmp   SHORT Set_Dig            ; Einsetzen
+    jmp   SHORT Set_Dig            ; Insert
 
 Is_Digit:
     cmp   al,'0'
-    jb    No_Char                  ; Fehler
+    jb    No_Char                  ; Error
     sub   al,'0'                   ; '0'..'9' -> 0..9
 
 Set_Dig:
-    or    dl,al                    ; Einsetzen
+    or    dl,al                    ; Insert
     dec   ch
     jnz   Do_Digit
     jmp   SHORT Dig_Done
 
 No_Char:
-    xor   dx,dx                    ; Fehleranzeige: dx = 0
+    xor   dx,dx                    ; Error display: DX = 0
 
 Dig_Done:
     pop   cx
@@ -1175,8 +1178,8 @@ Dig_Done:
 
 
 ;------------------------------------------------------------------------------
-; Auswertung der Kommandozeile. Aufruf mit ES:DI = Kommandozeile,
-; zurck mit gesetzter UMBList und gesetztem/geloeschten Carry
+; Parse the command line. Called with ES:DI = command line,
+; returns with UMBList set and Carry set/cleared
 ;------------------------------------------------------------------------------
 Set_List PROC NEAR
     xor   bx,bx                    ; Index in UMBs_List
@@ -1185,16 +1188,16 @@ Do_Elem:
     mov   al,es:[di]
     inc   di
     cmp   al,13                    ; Is a Carriage Return?
-    jz    List_Set                 ; -> Yes. Then finish
+    je    List_Set                 ; -> Yes. Then finish
     cmp   al,10                    ; Is a Line Feed?
-    jz    List_Set                 ; -> Same as above
+    je    List_Set                 ; -> Yes. Then finish
     cmp   al,'/'                   ; Is a Slash from "/I=..."?
-    jnz   Do_Elem
+    jne   Do_Elem
     mov   ax,es:[di]
 
     ;------ /7 - skip K7 test ------
     cmp   al,'7'
-    jnz   @No_7
+    jne   @No_7
     ;; '/7'                        , Was processed already before preinit
     jmp   Do_Elem
     ;-------------------------------
@@ -1203,51 +1206,51 @@ Do_Elem:
     and   al,0DFh                  ; Turn 'i' -> 'I'
 
     ;------ /S - skip unknown chipset break msg ------
-    cmp   al, 'S'
-    jnz   @No_S
+    cmp   al,'S'
+    jne   @No_S
     mov   SkipUkcMsg,1
     jmp   Do_Elem
     ;-------------------------------------------------
 
 @No_S:
-    cmp   ax,'=I'                  ; ist "I="? (verkehrtherum)
-    jnz   @No_I                    ;
-    add   di,2                     ; Ok, berspringen
-    call  Hex_To_Val               ; Hexzahl auswerten -> DX
-    jz    List_Error               ; -> war nichts
+    cmp   ax,'=I'                  ; Is it "I="? (reversed)
+    jne   @No_I                    ;
+    add   di,2                     ; OK, skip
+    call  Hex_To_Val               ; Parse hexadecimal number -> DX
+    jz    List_Error               ; -> Nothing found
     mov   al,es:[di]
-    cmp   al,'-'                   ; Trennstrich?
-    jnz   List_Error               ; -> war nichts
+    cmp   al,'-'                   ; Separator?
+    jne   List_Error               ; -> Nothing found
     inc   di
     call  Test_Start_Address       ; Wert in dx auf Start 16K-Block prfen
     jnz   List_Error
     jb    List_Error
     mov   cx,dx                    ; Startadresse festhalten
     call  Hex_To_Val               ; Endadresse ermitteln
-    jz    List_Error               ; -> war nichts
+    jz    List_Error               ; -> Nothing found
     call  Test_End_Address         ; Wert in dx auf Ende 16K-Block prfen
     jnz   List_Error
     jg    List_Error
-    mov   WORD PTR [UMBs_List + bx],cx  ; Eintrag Startadresse
+    mov   WORD PTR [UMBs_List + bx],cx   ; Entry start address
     mov   ax,dx
-    sub   ax,cx                        ; Groesse in Paragraphs
-    inc   ax                           ; B000-B7FF sind $800 Paragraphs!
+    sub   ax,cx                          ; Size in paragraphs
+    inc   ax                             ; B000-B7FF is $800 paragraphs!
     mov   WORD PTR [UMBs_List + bx + 2],ax
     add   bx,4
-    cmp   bx,40                        ; mehr als 10 Eintraege?
-    jb    Do_Elem                      ; -> nein, weiter
+    cmp   bx,40                          ; More than 10 entries?
+    jb    Do_Elem                        ; -> No, then continue
     jmp   List_Error
 
 @No_I:
     jmp   Do_Elem
 
 List_Error:
-    mov   ParamError,1
+    mov   Param_Error,1
     stc
     ret
 
 List_Set:
-    sub   bx,1                         ; setzt Carry, wenn BX = 0
+    sub   bx,1                     ; Set Carry if BX = 0
     ret
 
 Set_List ENDP
@@ -1256,15 +1259,14 @@ Set_List ENDP
 Test_Start_Address PROC NEAR
     pusha
     cmp   dx,0C000h
-    jb    @endeTestSA
+    jb    @EndTestSA
     mov   ax,dx
-;    mov   dx,0
-    mov   bx,BlockSize
+    mov   bx,Block_Size
     xor   dx,dx
     div   bx
     cmp   dx,0
 
-@endeTestSA:
+@EndTestSA:
     popa
     ret
 
@@ -1274,16 +1276,15 @@ Test_Start_Address ENDP
 Test_End_Address PROC NEAR
     pusha
     cmp   dx,0FFFFh
-    jg    @endeTestEA
+    jg    @EndTestEA
     add   dx,1
     mov   ax,dx
-;    mov   dx,0
-    mov   bx,BlockSize
-    xor   dx,dx
+    mov   bx,Block_Size
+    xor   dx,dx                    ; DX must clear to divide
     div   bx
     cmp   dx,0
 
-@endeTestEA:
+@EndTestEA:
     popa
     ret
 
@@ -1291,19 +1292,19 @@ Test_End_Address ENDP
 
 
 ;----------------------------- Strings for AMD K7 -----------------------------
-AMD_ID_String           db "AuthenticAMD"
-AMD_K7_Found$           db "AMD K7 CPU$"
-AMD_K8_Found$           db "AMD K8 CPU$"
+AMD_ID_String       db "AuthenticAMD"
+AMD_K7_Found$       db "AMD K7 CPU$"
+AMD_K8_Found$       db "AMD K8 CPU$"
 
 ifdef EnglVersion
-  AMD_Unknown_Found$    db "unknown AMD CPU >K8$"
-  ;no_AMD_found$        db "no AMD CPU found$"
-elseifdef PTBR_VERSION
-  AMD_Unknown_Found$    db "CPU AMD desconhecida (> K8)$"
-  ;no_AMD_found$        db "nenhuma CPU AMD encontrada$"
+AMD_Unknown_Found$  db "Unknown AMD CPU >K8$"
+;no_AMD_found$       db "no AMD CPU found$"
+elseifdef PTBR
+AMD_Unknown_Found$  db "CPU AMD desconhecida! (> K8)$"
+;no_AMD_found$       db "nenhuma CPU AMD encontrada$"
 else
-  AMD_Unknown_Found$    db "unbekannte AMD CPU >K8$"
-  ;no_AMD_found$        db "keine AMD CPU gefunden$"
+AMD_Unknown_Found$  db "unbekannte AMD CPU >K8$"
+;no_AMD_found$       db "keine AMD CPU gefunden$"
 endif
 ;------------------------------------------------------------------------------
 
@@ -1316,37 +1317,39 @@ South_Bridge$       db ' South-Bridge:', 36
 
 Device              db 01h
 
-South_Bridge_Found  db 0
+South_Bridge_Found  db 0           ; Flag for South Bridge found
 
 TestClass           dw 0601h, 0602h, 0000h, 0101h
 MaxDev              dw 0020h, 0020h, 0002h, 0020h
 TCIdx               dw 0000h
 
-@Print_Device_IDs:
-    ;erstmal sehen, ob ein PCI-BIOS da ist
-    mov   ax,0B101h
-    int   1Ah
-    jc    NixPCI
-    cmp   ah,0
-    jnz   NixPCI
-    cmp   dx,4350h
-    jnz   NixPCI
-    jmp   PCI_BIOS_OK
+Print_Device_IDs:
+    ;First, checks if a PCI BIOS is present
+;    mov   ax,0B101h
+;    int   1Ah
+;    jc    @PID_No_PCI_BIOS
+;    cmp   ah,0
+;    jne   @PID_No_PCI_BIOS
+;    cmp   dx,4350h
+;;    jne   PID_No_PCI_BIOS              ; PCI BIOS is not present
+;;    jmp   PID_PCI_BIOS_OK
+;    je    @VPCI_BIOS_OK
+    call  Check_PCI_BIOS           ; Check if a PCI BIOS is present
+    jnc   @PID_PCI_BIOS_OK         ; Yes (Carry = 0)
 
-NixPCI:
+;@PID_No_PCI_BIOS:
     call  Print_CRLF
     ret 
 
-PCI_BIOS_OK:
-    ;Vendor and Device ausgeben
-    
-    ;Print "North-Bridge:"
-    mov   dx,OFFSET North_Bridge$
-    call  Do_Print_Str
 
-    ;Print "Vendor:"
+;------------------------------------------------------------------------------
+;Show Vendor and Device
+;------------------------------------------------------------------------------
+@PID_PCI_BIOS_OK:
+    mov   dx,OFFSET North_Bridge$
+    call  Do_Print_Str             ; Prints "North-Bridge:"
     mov   dx,OFFSET Vendor$
-    call  Do_Print_Str
+    call  Do_Print_Str             ; Prints "Vendor:"
 
     ;Print Vendor-ID Host-Bridge
 ;    mov   di,0                     ; Reg.0 = Vendor-ID
@@ -1360,7 +1363,7 @@ PCI_BIOS_OK:
      
     ;Print "Device:"
     mov   dx,OFFSET Device$
-    call  Do_Print_Str
+    call  Do_Print_Str             ; Prints "Device:"
 
     ;Print Device-ID Host-Bridge
     mov   di,2                     ; Reg.2 = Device-ID
@@ -1372,14 +1375,11 @@ PCI_BIOS_OK:
     call  Print_Hex_Value
     call  Print_CRLF
 
-;------- South Bridge ------------
-    ;Print "South-Bridge:"
+    ;--------- Show South Bridge ---------
     mov   dx,OFFSET South_Bridge$
-    call  Do_Print_Str
-
-    ;Print "Vendor:"
+    call  Do_Print_Str             ; Prints "South-Bridge:"
     mov   dx,OFFSET Vendor$
-    call  Do_Print_Str
+    call  Do_Print_Str             ; Prints "Vendor:"
 
     mov   Device,1
 
@@ -1392,14 +1392,14 @@ PCI_BIOS_OK:
     mov   ax,0B109h
     int   1Ah
     cmp   cx,0FFFFh                ; FFFF heisst: Kein Device da
-    jnz   @South_Bridge_Found
+    jne   @South_Bridge_Found
 
 @Next_South:
     inc   Device         ;aufw„rts bis einschl.
     mov   di,TCIdx
     mov   dx, WORD PTR [MaxDev + di]
     cmp   Device,dl
-    jz    @Skip_South
+    je    @Skip_South
     jmp   @South
 
 
@@ -1412,7 +1412,7 @@ PCI_BIOS_OK:
     mov   di,TCIdx
     mov   ax,WORD PTR [TestClass + di]
     cmp   cx,ax
-    jz    @South_Bridge_Finally_Found
+    je    @South_Bridge_Finally_Found
 
 ;    cmp   cx,0                    ; auf alten Chipsaetzen kann auch null geliefert werden...
     jmp   @Next_South
@@ -1441,9 +1441,9 @@ PCI_BIOS_OK:
 
 @Skip_South:
     cmp   South_Bridge_Found,1
-    jz    @South_End
+    je    @South_End
     cmp   TCIdx,6
-    jz    @South_End
+    je    @South_End
 
     ;nochmal von vorne
     mov   Device,1
@@ -1457,7 +1457,31 @@ PCI_BIOS_OK:
     ret 
 
 
-;************* Ab hier PCI-Chipsatz-Programmierung *******
+;------------------------------------------------------------------------------
+; Checks for PCI BIOS (Returns Carry = 0 if Present, Otherwise Carry = 1)
+;------------------------------------------------------------------------------
+Check_PCI_BIOS PROC NEAR
+    mov   ax,0B101h
+    int   1Ah
+    jc    @CPB_No_PCI_BIOS         ; PCI Bios not present (CPB stands for Check_PCI_BIOS)
+    cmp   ah,0
+    jne   @CPB_No_PCI_BIOS         ; PCI Bios not present (CPB stands for Check_PCI_BIOS)
+    cmp   dx,4350h
+    je    @CPB_PCI_BIOS_Found      ; PCI BIOS is present, so continue (CPB stands for Check_PCI_BIOS)
+
+@CPB_No_PCI_BIOS:
+    stc                            ; No PCI BIOS found (Carry flag = 1)
+    ret
+
+@CPB_PCI_BIOS_Found:
+    clc                            ; PCI BIOS found (Carry flag = 0)
+    ret
+Check_PCI_BIOS ENDP
+
+
+;==============================================================================
+;       ************* PCI Chipset Programming Starts Here *************
+;==============================================================================
 
 PCIx MACRO n
     mov   ah,0B1h
@@ -1467,15 +1491,15 @@ ENDM
 
 
 ToggleCR0 MACRO
-    db 0Fh, 20h, 0C0h              ; MOV EAX,CR0
-    xor eax,040000000h
-    db 0Fh, 22h, 0C0h              ; MOV CR0,EAX
+    db    0Fh, 20h, 0C0h           ; MOV EAX,CR0
+    xor   eax,040000000h
+    db    0Fh, 22h, 0C0h           ; MOV CR0,EAX
 ENDM
 
 
 ClearICache MACRO
-    db 0Fh, 20h, 0D8h
-    db 0Fh, 22h, 0D8h
+    db    0Fh, 20h, 0D8h
+    db    0Fh, 22h, 0D8h
 ENDM
 
 
@@ -1516,7 +1540,7 @@ ifdef P2DebugVersion
     call  prKomma
     mov   eax,msrvallo
     call  Print_Hex_Value
-    call   prKomma
+    call  prKomma
     mov   eax,msrvalhi
     call  Print_Hex_Value
     mov   dx,OFFSET CR_LF_$
@@ -1527,28 +1551,27 @@ endif
 ENDM
 ;---------------------------------------------
 
-
-;------------------ MOVED TO TOP OF CODE ------------------
-;INTEL_ID        equ 8086h
-;VIA_ID          equ 1106h
-;SIS_ID          equ 1039h
-;ALI_ID          equ 10B9h
-;AMD_ID          equ 1022h
-;OPTI_ID         equ 1045h
-;UMC_ID          equ 1060h
-;NV_ID           equ 10DEh
-;SIO_ID          equ 0484h      ; SIO
-;PIIX2_ID        equ 122Eh      ; PIIX, Funktion 0
-;PIIX3_ID        equ 7000h      ; PIIX3, Funktion 0
-;PIIX4_ID        equ 7110h      ; PIIX4, Funktion 0
-;----------------------------------------------------------
-
-ID_LIST_LENGTH  equ 33         ; Length of each data line (register)of list
-			       ; (used to scan the chipset list)
-
 ;==============================================================================
-; Chipset List
-;==============================================================================
+
+
+;================================ Chipsets List ===============================
+
+INTEL_ID         equ 8086h
+VIA_ID           equ 1106h
+SIS_ID           equ 1039h
+ALI_ID           equ 10B9h
+AMD_ID           equ 1022h
+OPTI_ID          equ 1045h
+UMC_ID           equ 1060h
+NV_ID            equ 10DEh
+SIO_ID           equ 0484h         ; SIO
+PIIX2_ID         equ 122Eh         ; PIIX, Function 0
+PIIX3_ID         equ 7000h         ; PIIX3, Function 0
+PIIX4_ID         equ 7110h         ; PIIX4, Function 0
+
+ID_LIST_LENGTH   equ 33            ; Length of each data line (register) of
+                   ; list (used to scan the chipset list)
+
 ID_List:
 
 ;----------------------------------- Intel -----------------------------------
@@ -1817,186 +1840,186 @@ ID_List:
     dw INTEL_ID, 0D132h, 0000h, OFFSET Intel845_List, 1, 0
     db 'Intel Core i7 CPU$   '
 
-    dw INTEL_ID, 0100h, 0000h, OFFSET IntelCore2ndGenList, 1, 0
+    dw INTEL_ID, 0100h, 0000h, OFFSET IntelCore2ndGen_List, 1, 0
     db 'Intel Core 2nd Gen$  '
  
-    dw INTEL_ID, 0104h, 0000h, OFFSET IntelCore2ndGenList, 1, 0
+    dw INTEL_ID, 0104h, 0000h, OFFSET IntelCore2ndGen_List, 1, 0
     db 'Intel Core 2nd Gen$  '
  
-    dw INTEL_ID, 0108h, 0000h, OFFSET IntelCore2ndGenList, 1, 0
+    dw INTEL_ID, 0108h, 0000h, OFFSET IntelCore2ndGen_List, 1, 0
     db 'Intel Core 2nd Gen$  '
  
-    dw INTEL_ID, 010Ch, 0000h, OFFSET IntelCore2ndGenList, 1, 0
+    dw INTEL_ID, 010Ch, 0000h, OFFSET IntelCore2ndGen_List, 1, 0
     db 'Intel Core 2nd Gen$  '
 
-    dw INTEL_ID, 0150h, 0000h, OFFSET IntelCore2ndGenList, 1, 0
+    dw INTEL_ID, 0150h, 0000h, OFFSET IntelCore2ndGen_List, 1, 0
     db 'Intel Core 3rd Gen$  '
  
-    dw INTEL_ID, 0154h, 0000h, OFFSET IntelCore2ndGenList, 1, 0
+    dw INTEL_ID, 0154h, 0000h, OFFSET IntelCore2ndGen_List, 1, 0
     db 'Intel Core 3rd Gen$  '
  
-    dw INTEL_ID, 0158h, 0000h, OFFSET IntelCore2ndGenList, 1, 0
+    dw INTEL_ID, 0158h, 0000h, OFFSET IntelCore2ndGen_List, 1, 0
     db 'Intel Core 3rd Gen$  '
  
-    dw INTEL_ID, 015Ch, 0000h, OFFSET IntelCore2ndGenList, 1, 0
+    dw INTEL_ID, 015Ch, 0000h, OFFSET IntelCore2ndGen_List, 1, 0
     db 'Intel Core 3rd Gen$  '
 
-    dw INTEL_ID, 0C00h, 0000h, OFFSET IntelCore2ndGenList, 1, 0
+    dw INTEL_ID, 0C00h, 0000h, OFFSET IntelCore2ndGen_List, 1, 0
     db 'Intel Core 4th Gen$  '
  
-    dw INTEL_ID, 0C04h, 0000h, OFFSET IntelCore2ndGenList, 1, 0
+    dw INTEL_ID, 0C04h, 0000h, OFFSET IntelCore2ndGen_List, 1, 0
     db 'Intel Core 4th Gen$  '
  
-    dw INTEL_ID, 0D04h, 0000h, OFFSET IntelCore2ndGenList, 1, 0
+    dw INTEL_ID, 0D04h, 0000h, OFFSET IntelCore2ndGen_List, 1, 0
     db 'Intel Core 4th Gen$  '
  
-    dw INTEL_ID, 0A04h, 0000h, OFFSET IntelCore2ndGenList, 1, 0
+    dw INTEL_ID, 0A04h, 0000h, OFFSET IntelCore2ndGen_List, 1, 0
     db 'Intel Core 4th Gen$  '
  
-    dw INTEL_ID, 0D00h, 0000h, OFFSET IntelCore2ndGenList, 1, 0
+    dw INTEL_ID, 0D00h, 0000h, OFFSET IntelCore2ndGen_List, 1, 0
     db 'Intel Core 4th Gen$  '
  
-    dw INTEL_ID, 0A04h, 0000h, OFFSET IntelCore2ndGenList, 1, 0
+    dw INTEL_ID, 0A04h, 0000h, OFFSET IntelCore2ndGen_List, 1, 0
     db 'Intel Core 4th Gen$  '
 
-    dw INTEL_ID, 1900h, 0000h, OFFSET IntelCore2ndGenList, 1, 0
+    dw INTEL_ID, 1900h, 0000h, OFFSET IntelCore2ndGen_List, 1, 0
     db 'Intel Core 6th Gen$  '
  
-    dw INTEL_ID, 190Fh, 0000h, OFFSET IntelCore2ndGenList, 1, 0
+    dw INTEL_ID, 190Fh, 0000h, OFFSET IntelCore2ndGen_List, 1, 0
     db 'Intel Core 6th Gen$  '
  
-    dw INTEL_ID, 191Fh, 0000h, OFFSET IntelCore2ndGenList, 1, 0
+    dw INTEL_ID, 191Fh, 0000h, OFFSET IntelCore2ndGen_List, 1, 0
     db 'Intel Core 6th Gen$  '
 
 ;------------------------------- Core 7th Gen ---------------------------------
-    dw INTEL_ID, 5900h, 0000h, OFFSET IntelCore7thGenList, 1, 0
+    dw INTEL_ID, 5900h, 0000h, OFFSET IntelCore7thGen_List, 1, 0
     db 'Intel Core 7th Gen$  '
  
-    dw INTEL_ID, 5904h, 0000h, OFFSET IntelCore7thGenList, 1, 0
+    dw INTEL_ID, 5904h, 0000h, OFFSET IntelCore7thGen_List, 1, 0
     db 'Intel Core 7th Gen$  '
  
-    dw INTEL_ID, 590ch, 0000h, OFFSET IntelCore7thGenList, 1, 0
+    dw INTEL_ID, 590ch, 0000h, OFFSET IntelCore7thGen_List, 1, 0
     db 'Intel Core 7th Gen$  '
  
-    dw INTEL_ID, 590fh, 0000h, OFFSET IntelCore7thGenList, 1, 0
+    dw INTEL_ID, 590fh, 0000h, OFFSET IntelCore7thGen_List, 1, 0
     db 'Intel Core 7th Gen$  '
  
-    dw INTEL_ID, 5910h, 0000h, OFFSET IntelCore7thGenList, 1, 0
+    dw INTEL_ID, 5910h, 0000h, OFFSET IntelCore7thGen_List, 1, 0
     db 'Intel Core 7th Gen$  '
  
-    dw INTEL_ID, 5914h, 0000h, OFFSET IntelCore7thGenList, 1, 0
+    dw INTEL_ID, 5914h, 0000h, OFFSET IntelCore7thGen_List, 1, 0
     db 'Intel Core 7th Gen$  '
  
-    dw INTEL_ID, 5918h, 0000h, OFFSET IntelCore7thGenList, 1, 0
+    dw INTEL_ID, 5918h, 0000h, OFFSET IntelCore7thGen_List, 1, 0
     db 'Intel Core 7th Gen$  '
  
-    dw INTEL_ID, 591fh, 0000h, OFFSET IntelCore7thGenList, 1, 0
+    dw INTEL_ID, 591fh, 0000h, OFFSET IntelCore7thGen_List, 1, 0
     db 'Intel Core 7th Gen$  '
 
 ;------------------------------- Xeon E3-1200 ---------------------------------
-    dw INTEL_ID, 3e10h, 0000h, OFFSET IntelCore7thGenList, 1, 0
+    dw INTEL_ID, 3e10h, 0000h, OFFSET IntelCore7thGen_List, 1, 0
     db 'Intel Core 8th Gen$  '
  
-    dw INTEL_ID, 3e18h, 0000h, OFFSET IntelCore7thGenList, 1, 0
+    dw INTEL_ID, 3e18h, 0000h, OFFSET IntelCore7thGen_List, 1, 0
     db 'Intel Core 8th Gen$  '
  
-    dw INTEL_ID, 3e1fh, 0000h, OFFSET IntelCore7thGenList, 1, 0
+    dw INTEL_ID, 3e1fh, 0000h, OFFSET IntelCore7thGen_List, 1, 0
     db 'Intel Core 8th Gen$  '
  
-    dw INTEL_ID, 3e30h, 0000h, OFFSET IntelCore7thGenList, 1, 0
+    dw INTEL_ID, 3e30h, 0000h, OFFSET IntelCore7thGen_List, 1, 0
     db 'Intel Core 8th Gen$  '
  
-    dw INTEL_ID, 3e33h, 0000h, OFFSET IntelCore7thGenList, 1, 0
+    dw INTEL_ID, 3e33h, 0000h, OFFSET IntelCore7thGen_List, 1, 0
     db 'Intel Core 8th Gen$  '
  
-    dw INTEL_ID, 3e34h, 0000h, OFFSET IntelCore7thGenList, 1, 0
+    dw INTEL_ID, 3e34h, 0000h, OFFSET IntelCore7thGen_List, 1, 0
     db 'Intel Core 8th Gen$  '
 
 ;------------------------------- Core 8/9th Gen -------------------------------
-    dw INTEL_ID, 3ec2h, 0000h, OFFSET IntelCore7thGenList, 1, 0
+    dw INTEL_ID, 3ec2h, 0000h, OFFSET IntelCore7thGen_List, 1, 0
     db 'Intel Core 8th Gen$  '
  
-    dw INTEL_ID, 3ec4h, 0000h, OFFSET IntelCore7thGenList, 1, 0
+    dw INTEL_ID, 3ec4h, 0000h, OFFSET IntelCore7thGen_List, 1, 0
     db 'Intel Core 8th Gen$  '
  
-    dw INTEL_ID, 3ec6h, 0000h , OFFSET IntelCore7thGenList, 1, 0
+    dw INTEL_ID, 3ec6h, 0000h , OFFSET IntelCore7thGen_List, 1, 0
     db 'Intel Core 8th Gen$  '
  
-    dw INTEL_ID, 3ecah, 0000h , OFFSET IntelCore7thGenList, 1, 0
+    dw INTEL_ID, 3ecah, 0000h , OFFSET IntelCore7thGen_List, 1, 0
     db 'Intel Core 8th Gen$  '
  
-    dw INTEL_ID, 3ed0h, 0000h , OFFSET IntelCore7thGenList, 1, 0
+    dw INTEL_ID, 3ed0h, 0000h , OFFSET IntelCore7thGen_List, 1, 0
     db 'Intel Core 8th Gen$  '
 
 ;------------------------------- Core 10th Gen --------------------------------
     ;Y Processor 2 Cores 0x8A00h
-    dw INTEL_ID, 8A00h, 0000h, OFFSET IntelCore7thGenList, 1, UNSUPPORTED_UNTESTED
+    dw INTEL_ID, 8A00h, 0000h, OFFSET IntelCore7thGen_List, 1, UNSUPPORTED_UNTESTED
     db 'Intel Core 10th Gen$ '
  
     ;U Processor 2 Cores 0x8A02h
-    dw INTEL_ID, 8A02h, 0000h, OFFSET IntelCore7thGenList, 1, UNSUPPORTED_UNTESTED
+    dw INTEL_ID, 8A02h, 0000h, OFFSET IntelCore7thGen_List, 1, UNSUPPORTED_UNTESTED
     db 'Intel Core 10th Gen$ '
  
     ;Y Processor 4 Cores 0x8A10h
-    dw INTEL_ID, 8A10h, 0000h, OFFSET IntelCore7thGenList, 1, UNSUPPORTED_UNTESTED
+    dw INTEL_ID, 8A10h, 0000h, OFFSET IntelCore7thGen_List, 1, UNSUPPORTED_UNTESTED
     db 'Intel Core 10th Gen$ '
  
     ;U Processor 4 Cores 0x8A12h
-    dw INTEL_ID, 8A12h, 0000h, OFFSET IntelCore7thGenList, 1, UNSUPPORTED_UNTESTED
+    dw INTEL_ID, 8A12h, 0000h, OFFSET IntelCore7thGen_List, 1, UNSUPPORTED_UNTESTED
     db 'Intel Core 10th Gen$ '
  
-    dw INTEL_ID, 9B53h, 0000h, OFFSET IntelCore7thGenList, 1, UNSUPPORTED_UNTESTED
+    dw INTEL_ID, 9B53h, 0000h, OFFSET IntelCore7thGen_List, 1, UNSUPPORTED_UNTESTED
     db 'Intel Core 10th Gen$ '
 
 ;------------------------------- Core 11th Gen --------------------------------
     ;11th Generation Intel® Core™ Processor 8 Core 4C43h
-    dw INTEL_ID, 4C43h, 0000h, OFFSET IntelCore7thGenList, 1, UNSUPPORTED_UNTESTED
+    dw INTEL_ID, 4C43h, 0000h, OFFSET IntelCore7thGen_List, 1, UNSUPPORTED_UNTESTED
     db 'Intel Core 11th Gen$ '
  
     ;11th Generation Intel® Core™ Processor 6 Core 4C53h
-    dw INTEL_ID, 4C53h, 0000h, OFFSET IntelCore7thGenList, 1, UNSUPPORTED_UNTESTED
+    dw INTEL_ID, 4C53h, 0000h, OFFSET IntelCore7thGen_List, 1, UNSUPPORTED_UNTESTED
     db 'Intel Core 11th Gen$ '
 
 ;------------------------------- Core 12th Gen --------------------------------
     ;S LGA 8+8
-    dw INTEL_ID, 4660h, 0000h, OFFSET IntelCore7thGenList, 1, UNSUPPORTED_UNTESTED
+    dw INTEL_ID, 4660h, 0000h, OFFSET IntelCore7thGen_List, 1, UNSUPPORTED_UNTESTED
     db 'Intel Core 12th Gen$ '
  
     ;S LGA 8+4
-    dw INTEL_ID, 4668h, 0000h, OFFSET IntelCore7thGenList, 1, UNSUPPORTED_UNTESTED
+    dw INTEL_ID, 4668h, 0000h, OFFSET IntelCore7thGen_List, 1, UNSUPPORTED_UNTESTED
     db 'Intel Core 12th Gen$ '
  
     ;S LGA 6+4 
-    dw INTEL_ID, 4648h, 0000h, OFFSET IntelCore7thGenList, 1, UNSUPPORTED_UNTESTED
+    dw INTEL_ID, 4648h, 0000h, OFFSET IntelCore7thGen_List, 1, UNSUPPORTED_UNTESTED
     db 'Intel Core 12th Gen$ '
 
-    dw INTEL_ID, 1604h, 0000h, OFFSET IntelCore2ndGenList, 1, 0
+    dw INTEL_ID, 1604h, 0000h, OFFSET IntelCore2ndGen_List, 1, 0
     db 'Intel Broadwell-U$   '
 
 
 ; already as 'Intel Core 3rd Gen'
-    ;dw INTEL_ID, 0150h, 0000h, OFFSET IntelCore2ndGenList, 1, 0
+    ;dw INTEL_ID, 0150h, 0000h, OFFSET IntelCore2ndGen_List, 1, 0
     ;db 'Intel XEON E3-1200v2$'
 
-    dw INTEL_ID, 0C08h, 0000h, OFFSET IntelCore2ndGenList, 1, 0
+    dw INTEL_ID, 0C08h, 0000h, OFFSET IntelCore2ndGen_List, 1, 0
     db 'Intel XEON E3-1200v3$'
 
-    dw INTEL_ID, 000Bh, 0000h, OFFSET IntelCore2ndGenList, 1, 0
+    dw INTEL_ID, 000Bh, 0000h, OFFSET IntelCore2ndGen_List, 1, 0
     db 'Intel XEON E3-1200v4$'
 
     dw INTEL_ID, 3C00h, 0000h, OFFSET No_List, 1, UNSUPPORTED_NO_SHADOW_RAM
     db 'Intel XEON E5$       '
 
-    dw INTEL_ID, 2D81h, 0000h, OFFSET IntelCore2011List, 1, 0
+    dw INTEL_ID, 2D81h, 0000h, OFFSET IntelCore2011_List, 1, 0
     db 'Intel XEON 5600$     '
 
-    ;dw INTEL_ID, 0E00h, 0000h, OFFSET IntelCore2ndGenList, 1, 0
+    ;dw INTEL_ID, 0E00h, 0000h, OFFSET IntelCore2ndGen_List, 1, 0
     ;db 'Intel Core i7$       '
 
-    ;dw INTEL_ID, 2C61h, 0000h, OFFSET IntelCore2011List, 1, 0
+    ;dw INTEL_ID, 2C61h, 0000h, OFFSET IntelCore2011_List, 1, 0
     ;db 'Intel Core CPU$      '
  
-    dw INTEL_ID, 3CF4h, 0000h , OFFSET IntelCore2011List, 1, 0
+    dw INTEL_ID, 3CF4h, 0000h , OFFSET IntelCore2011_List, 1, 0
     db 'Intel Core CPU$      '
 
 
@@ -2238,50 +2261,50 @@ ID_List:
 
 ; ------------- VIA P4 --------------------
 
- dw VIA_ID, 3128h, 0000h, OFFSET VIA_Uni_List, 1, 0
- db 'VIA P4X266$          '
+    dw VIA_ID, 3128h, 0000h, OFFSET VIA_Uni_List, 1, 0
+    db 'VIA P4X266$          '
 
- dw VIA_ID, 3148h, 0000h, OFFSET VIA_Uni_List, 1, 0
- db 'VIA P4M266$          '
+    dw VIA_ID, 3148h, 0000h, OFFSET VIA_Uni_List, 1, 0
+    db 'VIA P4M266$          '
 
- dw VIA_ID, 3158h, 0000h, OFFSET VIA_Uni_List, 1, 0
- db 'VIA P4N266$          '
+    dw VIA_ID, 3158h, 0000h, OFFSET VIA_Uni_List, 1, 0
+    db 'VIA P4N266$          '
 
- dw VIA_ID, 3168h, 0000h, OFFSET VIA_Uni_List, 1, 0
- db 'VIA P4X333$          '
+    dw VIA_ID, 3168h, 0000h, OFFSET VIA_Uni_List, 1, 0
+    db 'VIA P4X333$          '
 
- dw VIA_ID, 3178h, 0000h, OFFSET VIA_Uni_List, 1, 0
- db 'VIA P4N333$          '
+    dw VIA_ID, 3178h, 0000h, OFFSET VIA_Uni_List, 1, 0
+    db 'VIA P4N333$          '
 
- dw VIA_ID, 3198h, 0000h, OFFSET VIA_Uni_List, 1, 0
- db 'VIA P4X600$          '
+    dw VIA_ID, 3198h, 0000h, OFFSET VIA_Uni_List, 1, 0
+    db 'VIA P4X600$          '
 
- dw VIA_ID, 0258h, 0000h, OFFSET VIA_Uni_List, 1, 0
- db 'VIA PT880$           '
+    dw VIA_ID, 0258h, 0000h, OFFSET VIA_Uni_List, 1, 0
+    db 'VIA PT880$           '
 
- dw VIA_ID, 0259h, 0000h, OFFSET VIA_Uni_List, 1, 0
- db 'VIA PM880$           '
+    dw VIA_ID, 0259h, 0000h, OFFSET VIA_Uni_List, 1, 0
+    db 'VIA PM880$           '
 
- dw VIA_ID, 0296h, 0000h, OFFSET VIA_Uni_List, 1, 0
- db 'VIA P4M800$          '
+    dw VIA_ID, 0296h, 0000h, OFFSET VIA_Uni_List, 1, 0
+    db 'VIA P4M800$          '
 
- dw VIA_ID, 0290h, 0000h, OFFSET VIA_Uni_List, 1, UNSUPPORTED_UNTESTED
- db 'VIA P4 chipset$      '
+    dw VIA_ID, 0290h, 0000h, OFFSET VIA_Uni_List, 1, UNSUPPORTED_UNTESTED
+    db 'VIA P4 chipset$      '
 
- dw VIA_ID, 0308h, 0000h, OFFSET No_List, 1, UNSUPPORTED_NO_DATASHEET
- db 'VIA PT880$           '
+    dw VIA_ID, 0308h, 0000h, OFFSET No_List, 1, UNSUPPORTED_NO_DATASHEET
+    db 'VIA PT880$           '
 
-; dw VIA_ID, 0314h, 0000h, OFFSET No_List, 1, UNSUPPORTED_NO_DATASHEET
-; db 'VIA P4 chipset$      '
+;    dw VIA_ID, 0314h, 0000h, OFFSET No_List, 1, UNSUPPORTED_NO_DATASHEET
+;    db 'VIA P4 chipset$      '
 
-; dw VIA_ID, 0324h, 0000h, OFFSET No_List, 1, UNSUPPORTED_NO_DATASHEET
-; db 'VIA P4 chipset$      '
+;    dw VIA_ID, 0324h, 0000h, OFFSET No_List, 1, UNSUPPORTED_NO_DATASHEET
+;    db 'VIA P4 chipset$      '
 
-; dw VIA_ID, 0327h, 0000h, OFFSET No_List, 1, UNSUPPORTED_NO_DATASHEET
-; db 'VIA P4M890$          '
+;    dw VIA_ID, 0327h, 0000h, OFFSET No_List, 1, UNSUPPORTED_NO_DATASHEET
+;    db 'VIA P4M890$          '
 
- dw VIA_ID, 0336h, 0000h, OFFSET No_List, 1, UNSUPPORTED_NO_DATASHEET
- db 'VIA K8M890CE$        '
+    dw VIA_ID, 0336h, 0000h, OFFSET No_List, 1, UNSUPPORTED_NO_DATASHEET
+    db 'VIA K8M890CE$        '
 
     dw VIA_ID, 0340h, 0000h, OFFSET No_List, 1, UNSUPPORTED_NO_DATASHEET
     db 'VIA PT900$           '
@@ -2306,26 +2329,26 @@ ID_List:
     db 'VIA P/KN266$         '
 
 ;--------------------- VIA K7 ------------------------
-; dw VIA_ID, 0391h, 0686h, OFFSET No_List, 1, UNSUPPORTED_WRONG_DOC
-; db 'VIA KX133$           '
+;    dw VIA_ID, 0391h, 0686h, OFFSET No_List, 1, UNSUPPORTED_WRONG_DOC
+;    db 'VIA KX133$           '
 ;
-; dw VIA_ID, 0305h, 0686h, OFFSET No_List, 1, UNSUPPORTED_WRONG_DOC
-; db 'VIA KT133$           '
+;    dw VIA_ID, 0305h, 0686h, OFFSET No_List, 1, UNSUPPORTED_WRONG_DOC
+;    db 'VIA KT133$           '
 ;
-; dw VIA_ID, 0305h, 0000h, OFFSET No_List, 1, UNSUPPORTED_WRONG_DOC
-; db 'VIA KT133$           '
+;    dw VIA_ID, 0305h, 0000h, OFFSET No_List, 1, UNSUPPORTED_WRONG_DOC
+;    db 'VIA KT133$           '
 ;
-; dw VIA_ID, 3099h, 0000h, OFFSET No_List, 1, UNSUPPORTED_NO_DATASHEET
-; db 'VIA KT266/KT333$     '
+;    dw VIA_ID, 3099h, 0000h, OFFSET No_List, 1, UNSUPPORTED_NO_DATASHEET
+;    db 'VIA KT266/KT333$     '
 ;
-; dw VIA_ID, 3189h, 0000h, OFFSET No_List, 1, UNSUPPORTED_NO_DATASHEET
-; db 'VIA KT400$           '
+;    dw VIA_ID, 3189h, 0000h, OFFSET No_List, 1, UNSUPPORTED_NO_DATASHEET
+;    db 'VIA KT400$           '
 ;
-; dw VIA_ID, 3112h, 0000h, OFFSET No_List, 1, UNSUPPORTED_NO_DATASHEET
-; db 'VIA KLE133$          '
+;    dw VIA_ID, 3112h, 0000h, OFFSET No_List, 1, UNSUPPORTED_NO_DATASHEET
+;    db 'VIA KLE133$          '
 ;
-; dw VIA_ID, 3102h, 0000h, OFFSET No_List, 1, UNSUPPORTED_NO_DATASHEET
-; db 'VIA VT8362$          '
+;    dw VIA_ID, 3102h, 0000h, OFFSET No_List, 1, UNSUPPORTED_NO_DATASHEET
+;    db 'VIA VT8362$          '
 
 
 ; --------------------------------------------
@@ -2338,146 +2361,146 @@ ID_List:
 ; --------------------------------------------
 ; ------------ VIA Socket 7 ------------------
 ; --------------------------------------------
-     dw VIA_ID, 0576h, 0000h, OFFSET No_List, 0, 4
-     db 'VIA Apollo$          '
+    dw VIA_ID, 0576h, 0000h, OFFSET No_List, 0, 4
+    db 'VIA Apollo$          '
 
-     dw VIA_ID, 0585h, 0586h, OFFSET VIA_List, 0, 0
-     db 'VIA Apollo VP/VPX$   '
+    dw VIA_ID, 0585h, 0586h, OFFSET VIA_List, 0, 0
+    db 'VIA Apollo VP/VPX$   '
 
-     dw VIA_ID, 0595h, 0586h, OFFSET VIA_List, 0, 0
-     db 'VIA Apollo VP2$      '
+    dw VIA_ID, 0595h, 0586h, OFFSET VIA_List, 0, 0
+    db 'VIA Apollo VP2$      '
 
-     dw VIA_ID, 1595h, 0586h, OFFSET VIA_List, 0, 0
-     db 'VIA Apollo VP2/97$   '
+    dw VIA_ID, 1595h, 0586h, OFFSET VIA_List, 0, 0
+    db 'VIA Apollo VP2/97$   '
 
- dw VIA_ID, 0598h, 0586h, OFFSET VIA_List, 0, 0
- db 'VIA Apollo MVP3$     '
+    dw VIA_ID, 0598h, 0586h, OFFSET VIA_List, 0, 0
+    db 'VIA Apollo MVP3$     '
 
- dw VIA_ID, 0598h, 0596h, OFFSET VIA_List, 0, 0
- db 'VIA Apollo MVP3+$    '
+    dw VIA_ID, 0598h, 0596h, OFFSET VIA_List, 0, 0
+    db 'VIA Apollo MVP3+$    '
 
- dw VIA_ID, 0598h, 0686h, OFFSET VIA_List, 0, 0
- db 'VIA Apollo MVP3++$   '
+    dw VIA_ID, 0598h, 0686h, OFFSET VIA_List, 0, 0
+    db 'VIA Apollo MVP3++$   '
 
- dw VIA_ID, 0597h, 0586h, OFFSET VIA_List, 0, 0
- db 'VIA Apollo VP3$      '
+    dw VIA_ID, 0597h, 0586h, OFFSET VIA_List, 0, 0
+    db 'VIA Apollo VP3$      '
 
- dw VIA_ID, 0598h, 0586h, OFFSET VIA_List, 0, 0      ;8598h ist die AGP-Bridge...
- db 'VIA Apollo MVP3$     '
+    dw VIA_ID, 0598h, 0586h, OFFSET VIA_List, 0, 0      ;8598h ist die AGP-Bridge...
+    db 'VIA Apollo MVP3$     '
 
- dw VIA_ID, 0597h, 0596h, OFFSET VIA_List, 0, 0
- db 'VIA Apollo VP3+$     '
+    dw VIA_ID, 0597h, 0596h, OFFSET VIA_List, 0, 0
+    db 'VIA Apollo VP3+$     '
 
- dw VIA_ID, 0597h, 0686h, OFFSET VIA_List, 0, 0
- db 'VIA Apollo MVP3++$   '
+    dw VIA_ID, 0597h, 0686h, OFFSET VIA_List, 0, 0
+    db 'VIA Apollo MVP3++$   '
 
- dw VIA_ID, 0501h, 0686h, OFFSET VIA_List, 0, 0
- db 'VIA Apollo MVP4$     '
+    dw VIA_ID, 0501h, 0686h, OFFSET VIA_List, 0, 0
+    db 'VIA Apollo MVP4$     '
 
 
 ;----------------------- VIA C7 -----------------------
-;    dw VIA_ID, 7324h, 3324h, OFFSET VIA_CX700_list, 0, 0
+;    dw VIA_ID, 7324h, 3324h, OFFSET VIA_CX700_List, 0, 0
 ;    db 'VIA CX700$           '
 ;
-; dw VIA_ID, 7353h, 3353h, OFFSET VIA_CX700_list, 0, 0
-; db 'VIA VX800/VX820$     '
+;    dw VIA_ID, 7353h, 3353h, OFFSET VIA_CX700_List, 0, 0
+;    db 'VIA VX800/VX820$     '
 ;
-; dw VIA_ID, 7409h, 3409H, OFFSET VIA_CX700_list, 0, 0
-; db 'VIA VX855/VX875$     '
+;    dw VIA_ID, 7409h, 3409H, OFFSET VIA_CX700_List, 0, 0
+;    db 'VIA VX855/VX875$     '
 ;
-; dw VIA_ID, 7410h, 3410H, OFFSET VIA_CX700_list, 0, 0
-; db 'VIA VX900$           '
+;    dw VIA_ID, 7410h, 3410H, OFFSET VIA_CX700_List, 0, 0
+;    db 'VIA VX900$           '
 
- dw VIA_ID, 3324h, 0, OFFSET VIA_CX700_list, 0, 0
- db 'VIA CX700$           '
+    dw VIA_ID, 3324h, 0, OFFSET VIA_CX700_List, 0, 0
+    db 'VIA CX700$           '
 
- dw VIA_ID, 3353h, 0, OFFSET VIA_CX700_list, 0, 0
- db 'VIA VX800/VX820$     '
+    dw VIA_ID, 3353h, 0, OFFSET VIA_CX700_List, 0, 0
+    db 'VIA VX800/VX820$     '
 
- dw VIA_ID, 3409H, 0, OFFSET VIA_CX700_list, 0, 0
- db 'VIA VX855/VX875$     '
+    dw VIA_ID, 3409H, 0, OFFSET VIA_CX700_List, 0, 0
+    db 'VIA VX855/VX875$     '
 
- dw VIA_ID, 3410H, 0, OFFSET VIA_CX700_list, 0, 0
- db 'VIA VX900$           '
+    dw VIA_ID, 3410H, 0, OFFSET VIA_CX700_List, 0, 0
+    db 'VIA VX900$           '
 
 
 ;----------------------------------------------
 ;----------------------- SIS ------------------
 ; --------------------------------------------
-    dw SIS_ID, 0496h, 0000h, OFFSET SIS496list, 0, UNSUPPORTED_UNTESTED
+    dw SIS_ID, 0496h, 0000h, OFFSET SIS496_List, 0, UNSUPPORTED_UNTESTED
     db 'SiS 496$             '
 
-    dw SIS_ID, 0406h, 0000h, OFFSET SIS501list, 0, 0
+    dw SIS_ID, 0406h, 0000h, OFFSET SIS501_List, 0, 0
     db 'SiS 501$             '
 
-    dw SIS_ID, 5511h, 0008h, OFFSET SIS511list, 0, 0
+    dw SIS_ID, 5511h, 0008h, OFFSET SIS511_List, 0, 0
     db 'SiS 5511$            '
 
-    dw SIS_ID, 5571h, 0008h, OFFSET SIS571List, 0, 0
+    dw SIS_ID, 5571h, 0008h, OFFSET SIS571_List, 0, 0
     db 'SiS 5571$            '
 
- dw SIS_ID, 5596h, 0008h, OFFSET SIS59xList, 0, 0
- db 'SiS 5596$            '
+    dw SIS_ID, 5596h, 0008h, OFFSET SIS59x_List, 0, 0
+    db 'SiS 5596$            '
 
- dw SIS_ID, 5597h, 0008h, OFFSET SIS597List, 0, 0
- db 'SiS 5581/82/97/98$   '
-	      
- dw SIS_ID, 5591h, 0008h, OFFSET SIS59xList, 0, 0
- db 'SiS 5591/92$         '
+    dw SIS_ID, 5597h, 0008h, OFFSET SIS597_List, 0, 0
+    db 'SiS 5581/82/97/98$   '
 
- dw SIS_ID, 0530h, 0008h, OFFSET SIS59xList, 0, 0
- db 'SiS 530$             '
+    dw SIS_ID, 5591h, 0008h, OFFSET SIS59x_List, 0, 0
+    db 'SiS 5591/92$         '
 
- dw SIS_ID, 0540h, 0008h, OFFSET SIS59xList, 0, 0
- db 'SiS 540$             '
+    dw SIS_ID, 0530h, 0008h, OFFSET SIS59x_List, 0, 0
+    db 'SiS 530$             '
 
- dw SIS_ID, 0550h, 0008h, OFFSET SIS59xList, 0, 0
- db 'SiS 550$             '
+    dw SIS_ID, 0540h, 0008h, OFFSET SIS59x_List, 0, 0
+    db 'SiS 540$             '
 
- dw SIS_ID, 5600h, 0008h, OFFSET SIS600_List, 1, 0
- db 'SiS 600$             '
+    dw SIS_ID, 0550h, 0008h, OFFSET SIS59x_List, 0, 0
+    db 'SiS 550$             '
 
- dw SIS_ID, 0620h, 0008h, OFFSET SIS600_List, 1, 0
- db 'SiS 620$             '
+    dw SIS_ID, 5600h, 0008h, OFFSET SIS600_List, 1, 0
+    db 'SiS 600$             '
 
- dw SIS_ID, 5630h, 0008h, OFFSET SIS600_List, 1, 0
- db 'SiS 630$             '
+    dw SIS_ID, 0620h, 0008h, OFFSET SIS600_List, 1, 0
+    db 'SiS 620$             '
 
- dw SIS_ID, 0630h, 0008h, OFFSET SIS600_List, 1, 0
- db 'SiS 630$             '
+    dw SIS_ID, 5630h, 0008h, OFFSET SIS600_List, 1, 0
+    db 'SiS 630$             '
 
- dw SIS_ID, 0635h, 0000h, OFFSET SIS600_List, 1, 0
- db 'SiS 635$             '
+    dw SIS_ID, 0630h, 0008h, OFFSET SIS600_List, 1, 0
+    db 'SiS 630$             '
 
- dw SIS_ID, 0640h, 0000h, OFFSET SIS600_List, 1, 0
- db 'SiS 640$             '
+    dw SIS_ID, 0635h, 0000h, OFFSET SIS600_List, 1, 0
+    db 'SiS 635$             '
 
- dw SIS_ID, 0645h, 0000h, OFFSET SIS600_List, 1, 0
- db 'SiS 645$             '
+    dw SIS_ID, 0640h, 0000h, OFFSET SIS600_List, 1, 0
+    db 'SiS 640$             '
 
- dw SIS_ID, 0648h, 0000h, OFFSET SIS600_List, 1, 0
- db 'SiS 648$             '
+    dw SIS_ID, 0645h, 0000h, OFFSET SIS600_List, 1, 0
+    db 'SiS 645$             '
 
- dw SIS_ID, 0646h, 0000h, OFFSET SIS600_List, 1, 0
- db 'SiS 645DX$           '
+    dw SIS_ID, 0648h, 0000h, OFFSET SIS600_List, 1, 0
+    db 'SiS 648$             '
 
- dw SIS_ID, 0650h, 0000h, OFFSET SIS600_List, 1, 0
- db 'SiS 650$             '
+    dw SIS_ID, 0646h, 0000h, OFFSET SIS600_List, 1, 0
+    db 'SiS 645DX$           '
 
- dw SIS_ID, 0651h, 0000h, OFFSET SIS600_List, 1, 0
- db 'SiS 651$             '
+    dw SIS_ID, 0650h, 0000h, OFFSET SIS600_List, 1, 0
+    db 'SiS 650$             '
 
- dw SIS_ID, 0655h, 0000h, OFFSET SIS600_List, 1, 0
- db 'SiS 655$             '
+    dw SIS_ID, 0651h, 0000h, OFFSET SIS600_List, 1, 0
+    db 'SiS 651$             '
 
- dw SIS_ID, 0656h, 0000h, OFFSET SIS600_List, 1, 0
- db 'SiS 656$             '
+    dw SIS_ID, 0655h, 0000h, OFFSET SIS600_List, 1, 0
+    db 'SiS 655$             '
 
- dw SIS_ID, 0660h, 0000h, OFFSET SIS600_List, 1, 0
- db 'SiS 660$             '
+    dw SIS_ID, 0656h, 0000h, OFFSET SIS600_List, 1, 0
+    db 'SiS 656$             '
 
- dw SIS_ID, 0661h, 0000h, OFFSET SIS600_List, 1, 0
- db 'SiS 661$             '
+    dw SIS_ID, 0660h, 0000h, OFFSET SIS600_List, 1, 0
+    db 'SiS 660$             '
+
+    dw SIS_ID, 0661h, 0000h, OFFSET SIS600_List, 1, 0
+    db 'SiS 661$             '
 
     dw SIS_ID, 0662h, 0000h, OFFSET SIS600_List, 1, 0
     db 'SiS 662$             '
@@ -2492,20 +2515,20 @@ ID_List:
 ;    dw SIS_ID, 0730h, 0000h, OFFSET No_List, 1, UNSUPPORTED_NO_DATASHEET
 ;    db 'SiS 730$             '
 
-     dw SIS_ID, 0735h, 0000h, OFFSET SIS600_List, 1, UNSUPPORTED_UNTESTED
-     db 'SiS 735$             '
+    dw SIS_ID, 0735h, 0000h, OFFSET SIS600_List, 1, UNSUPPORTED_UNTESTED
+    db 'SiS 735$             '
 
-     dw SIS_ID, 0740h, 0000h, OFFSET SIS600_List, 1, UNSUPPORTED_UNTESTED
-     db 'SiS 740$             '
+    dw SIS_ID, 0740h, 0000h, OFFSET SIS600_List, 1, UNSUPPORTED_UNTESTED
+    db 'SiS 740$             '
  
-     dw SIS_ID, 0741h, 0000h, OFFSET SIS600_List, 1, 0
-     db 'SiS 741$             '
+    dw SIS_ID, 0741h, 0000h, OFFSET SIS600_List, 1, 0
+    db 'SiS 741$             '
  
-     dw SIS_ID, 0745h, 0000h, OFFSET SIS600_List, 1, UNSUPPORTED_UNTESTED
-     db 'SiS 745$             '
+    dw SIS_ID, 0745h, 0000h, OFFSET SIS600_List, 1, UNSUPPORTED_UNTESTED
+    db 'SiS 745$             '
 
-     dw SIS_ID, 0750h, 0000h, OFFSET SIS600_List, 1, UNSUPPORTED_UNTESTED
-     db 'SiS 750$             '
+    dw SIS_ID, 0750h, 0000h, OFFSET SIS600_List, 1, UNSUPPORTED_UNTESTED
+    db 'SiS 750$             '
 
 
 ;---------------------------------------------
@@ -2520,39 +2543,39 @@ ID_List:
     db 'ALi M1489$           '
 
 ;--------------- ALI Socket 7 -----------------
-    dw ALI_ID, 1541h, 0000h, OFFSET ALI5List, 0, 0
+    dw ALI_ID, 1541h, 0000h, OFFSET ALI5_List, 0, 0
     db 'ALi Aladdin V$       '
 
-    dw ALI_ID, 1531h, 0000h, OFFSET ALI3List, 0, 0
+    dw ALI_ID, 1531h, 0000h, OFFSET ALI3_List, 0, 0
     db 'ALi Aladdin IV$      '
 
-    dw ALI_ID, 1521h, 0000h, OFFSET ALI3List, 0, 0
+    dw ALI_ID, 1521h, 0000h, OFFSET ALI3_List, 0, 0
     db 'ALi Aladdin III$     '
 
-    dw ALI_ID, 1511h, 0000h, OFFSET ALI2List, 0, 0
+    dw ALI_ID, 1511h, 0000h, OFFSET ALI2_List, 0, 0
     db 'ALi Aladdin II$      '
 
 ;------------------- ALI P2 --------------------
-    dw ALI_ID, 1621h, 0000h, OFFSET ALIP2List, 1, 0
+    dw ALI_ID, 1621h, 0000h, OFFSET ALIP2_List, 1, 0
     db 'ALi Aladdin Pro II$  '
 
-    dw ALI_ID, 1631h, 0000h, OFFSET ALIP2List, 1, 0
+    dw ALI_ID, 1631h, 0000h, OFFSET ALIP2_List, 1, 0
     db 'ALi Aladdin Pro III$ '
 
-    dw ALI_ID, 1632h, 0000h, OFFSET ALIP2List, 1, 0
+    dw ALI_ID, 1632h, 0000h, OFFSET ALIP2_List, 1, 0
     db 'ALi i1 CyberBlade$   '
 
- dw ALI_ID, 1641h, 0000h, OFFSET ALIP2List, 1, 0
- db 'ALi Aladdin Pro IV$  '
+    dw ALI_ID, 1641h, 0000h, OFFSET ALIP2_List, 1, 0
+    db 'ALi Aladdin Pro IV$  '
 
- dw ALI_ID, 1651h, 0000h, OFFSET ALIK7List, 1, 0
- db 'ALi Aladdin Pro V$   '
+    dw ALI_ID, 1651h, 0000h, OFFSET ALIK7_List, 1, 0
+    db 'ALi Aladdin Pro V$   '
 
- dw ALI_ID, 1644h, 0000h, OFFSET ALIK7List, 1, 0
- db 'ALi M1644$           '
+    dw ALI_ID, 1644h, 0000h, OFFSET ALIK7_List, 1, 0
+    db 'ALi M1644$           '
 
 ; --------------- ALI K7 ---------------------
-;    dw ALI_ID, 1647h, 0000h, OFFSET ALIK7List, 1, UNSUPPORTED_NO_DATASHEET
+;    dw ALI_ID, 1647h, 0000h, OFFSET ALIK7_List, 1, UNSUPPORTED_NO_DATASHEET
 ;    db 'ALi ALiMAGiK 1$      '
 
 
@@ -2708,9 +2731,12 @@ ID_List:
     dw INTEL_ID, 1237h, 0000h, OFFSET Intel_Uni_List, 1, 0
     db 'Intel 440FX virtual$ '
 
-;------------------------------------- END ------------------------------------
     dw 0000h                       ; Chipset list end marker
 
+;------------------------------------- END ------------------------------------
+
+
+;============================ CHIPSETS CONFIG DATA ============================
 
 ;----------------- Defines for Chipsets Data Configuration List ---------------
 RWC_LO     equ 00F0Fh              ; Mask
@@ -2748,7 +2774,8 @@ No_List:
     dw 00000h
 
 
-EmptyList:  ; Dummy List for K7 and K8
+; Dummy List for K7 and K8
+Empty_List:
     dw 0C000h, 0Ah, 0h, 0, 0
     dw 0C400h, 0Ah, 0h, 0, 0
     dw 0C800h, 0Ah, 0h, 0, 0
@@ -2768,7 +2795,10 @@ EmptyList:  ; Dummy List for K7 and K8
     dw 00000h                      ; End of list marker
 
 
-SIO_List:  ; Segmente und Registerwerte fr Saturn, Mercury, Neptun
+;------------------------ START OF INTEL CHIPSETS LIST ------------------------
+
+; Segments and Register Values for Saturn, Mercury, Neptun
+SIO_List:
     dw 0C000h, 12h, 5Ah, RWC_LO, 154h, 0303h,  149h, BIT_0, 0
     dw 0C400h, 12h, 5Ah, RWC_HI, 154h, 0C0Ch,  149h, BIT_1, 0
     dw 0C800h, 12h, 5Bh, RWC_LO, 154h, 3030h,  149h, BIT_2, 0
@@ -2788,7 +2818,8 @@ SIO_List:  ; Segmente und Registerwerte fr Saturn, Mercury, Neptun
     dw 00000h                      ; End of list marker
 
 
-PIIX_List:  ; Segmente und Registerwerte fr Intel 430 und 440 + PIIX
+; Segments and Register Values for Intel 430 and 440 + PIIX
+PIIX_List:
     dw 0C000h, 0Ah, 5Ah, RWC_LO, 0
     dw 0C400h, 0Ah, 5Ah, RWC_HI, 0
     dw 0C800h, 0Ah, 5Bh, RWC_LO, 0
@@ -2808,7 +2839,8 @@ PIIX_List:  ; Segmente und Registerwerte fr Intel 430 und 440 + PIIX
     dw 00000h                      ; End of list marker
 
 
-Intel_Uni_List:  ; Segmente und Registerwerte fr alle 'alten' Intel-PCI-Chips„tze, kein DMA
+; Segments and Register Values for all 'alten' Intel-PCI-Chipsets, None DMA
+Intel_Uni_List:
     dw 0C000h, 0Ah, 5Ah, RWC_LO, 0
     dw 0C400h, 0Ah, 5Ah, RWC_HI, 0
     dw 0C800h, 0Ah, 5Bh, RWC_LO, 0
@@ -2828,7 +2860,9 @@ Intel_Uni_List:  ; Segmente und Registerwerte fr alle 'alten' Intel-PCI-Chips„t
     dw 00000h                      ; End of list marker
 
 
-Intel845_List:  ; Segmente und Registerwerte fr i845, i875, i9xx, X3x Chipsaetze, Intel Core 1st gen
+; Segments and Register Values for i845, i875, i9xx, X3x Chipsets, Intel
+; Core 1st Generation
+Intel845_List:
     dw 0C000h, 0Ah, 91h, BITS_1_0, 0
     dw 0C400h, 0Ah, 91h, BITS_5_4, 0
     dw 0C800h, 0Ah, 92h, BITS_1_0, 0
@@ -2848,7 +2882,9 @@ Intel845_List:  ; Segmente und Registerwerte fr i845, i875, i9xx, X3x Chipsaetz
     dw 00000h                      ; End of list marker
 
 
-IntelCore2ndGenList:  ; Segmente und Registerwerte fuer Intel Core i3, i5, i7 - xxxx (2nd, 3rd, 4th, 8th generation)
+; Segments and Register Values for Intel Core i3, i5, i7 - xxxx (2nd, 3rd,
+; 4th, 8th generation)
+IntelCore2ndGen_List:
     dw 0C000h, 0Ah, 81h, BITS_1_0, 0
     dw 0C400h, 0Ah, 81h, BITS_5_4, 0
     dw 0C800h, 0Ah, 82h, BITS_1_0, 0
@@ -2868,7 +2904,9 @@ IntelCore2ndGenList:  ; Segmente und Registerwerte fuer Intel Core i3, i5, i7 - 
     dw 00000h                      ; End of list marker
 
 
-IntelCore7thGenList:  ; Segmente und Registerwerte fuer Intel Core i3, i5, i7, i9 (7th..12th generation, with Lock bit at 80:0 cleared first)
+; Segments and Register values for Intel Core i3, i5, i7, i9
+; (7th..12th generation, with Lock bit at 80:0 cleared first)
+IntelCore7thGen_List:
     dw 0C000h, 0Eh, 80h, NOT_BIT_0, 81h, BITS_1_0, 0
     dw 0C400h, 0Eh, 80h, NOT_BIT_0, 81h, BITS_5_4, 0
     dw 0C800h, 0Eh, 80h, NOT_BIT_0, 82h, BITS_1_0, 0
@@ -2888,7 +2926,8 @@ IntelCore7thGenList:  ; Segmente und Registerwerte fuer Intel Core i3, i5, i7, i
     dw 00000h                      ; End of list marker
 
 
-IntelCore2011List:  ; Segmente und Registerwerte fuer Intel Core i3, i5, i7 - xxxx (2011 generation)
+; Segments and Register Values for Intel Core i3, i5, i7 - xxxx (2011 generation)
+IntelCore2011_List:
     dw 0C000h, 0Ah, 41h, BITS_1_0, 0
     dw 0C400h, 0Ah, 41h, BITS_5_4, 0
     dw 0C800h, 0Ah, 42h, BITS_1_0, 0
@@ -2908,8 +2947,8 @@ IntelCore2011List:  ; Segmente und Registerwerte fuer Intel Core i3, i5, i7 - xx
     dw 00000h                      ; End of list marker
 
 
-
-Intel810_List:  ; Segmente und Registerwerte fuer Intel-810, kein DMA
+; Segments and Register Values for Intel-810, None DMA
+Intel810_List:
     dw 0C000h, 0Ah, 51h, BITS_1_0, 0
     dw 0C400h, 0Ah, 51h, BITS_1_0, 0
     dw 0C800h, 0Ah, 51h, BITS_1_0, 0
@@ -2947,7 +2986,7 @@ Intel810_List:  ; Segmente und Registerwerte fuer Intel-810, kein DMA
 ;    dw 00000h
 
 
-Intel_Atom_List:  ; write access globally only by setting Bit0 at D8 to 0
+Intel_Atom_List:  ; Write access globally only by setting Bit0 at D8 to 0
     dw 0C000h, 0Ah, 0D8h, NOT_BIT_0, 0
     dw 0C400h, 0Ah, 0D8h, NOT_BIT_0, 0
     dw 0C800h, 0Ah, 0D8h, NOT_BIT_0, 0
@@ -2966,6 +3005,8 @@ Intel_Atom_List:  ; write access globally only by setting Bit0 at D8 to 0
     dw 0FC00h, 0Ah, 0D8h, NOT_BIT_0, 0
     dw 00000h                      ; End of list marker
 
+;------------------------- END OF INTEL CHIPSETS LIST -------------------------
+
 
 ;---------- VIA PAM Constants ----------
 VIA_RW0  equ  0303h
@@ -2974,7 +3015,8 @@ VIA_RW2  equ  3030h
 VIA_RW3  equ 0C0C0h
 ;---------------------------------------
 
-VIA_List:  ; Segmente und Registerwerte fr alle VIA-Chips„tze
+; Segments and Register Values for All VIA-Chipsets
+VIA_List:
     dw 0C000h, 18, 61h, VIA_RW0, 14Eh, BIT_0, 52h, 0080h, 0
     dw 0C400h, 18, 61h, VIA_RW1, 14Eh, BIT_1, 52h, 0080h, 0
     dw 0C800h, 14, 61h, VIA_RW2, 14Eh, BIT_2, 0
@@ -2994,7 +3036,8 @@ VIA_List:  ; Segmente und Registerwerte fr alle VIA-Chips„tze
     dw 00000h                      ; End of list marker
 
 
-VIA_Uni_List:  ; Segmente und Registerwerte fr alle VIA-Chips„tze
+; Segments and Register Values for All VIA-Chipsets
+VIA_Uni_List:
     dw 0C000h, 10, 61h, VIA_RW0, 0
     dw 0C400h, 10, 61h, VIA_RW1, 0
     dw 0C800h, 10, 61h, VIA_RW2, 0
@@ -3014,7 +3057,8 @@ VIA_Uni_List:  ; Segmente und Registerwerte fr alle VIA-Chips„tze
     dw 00000h                      ; End of list marker
 
 
-;VIA_CX700_list:  ; Segmente und Registerwerte fr VIA CX700 + VX8xx + VX900 Chipsaetze (function 7+3)
+; Segments and Register Values for VIA CX700 + VX8xx + VX900 Chipsets (function 7+3)
+;VIA_CX700_List:
 ;    dw 0C000h, 14, 61h, VIA_RW0, 180h, VIA_RW0, 0
 ;    dw 0C400h, 14, 61h, VIA_RW1, 180h, VIA_RW1, 0
 ;    dw 0C800h, 14, 61h, VIA_RW2, 180h, VIA_RW2, 0
@@ -3033,8 +3077,8 @@ VIA_Uni_List:  ; Segmente und Registerwerte fr alle VIA-Chips„tze
 ;    dw 0FC00h, 14, 63h, VIA_RW2, 183h, VIA_RW2, 0
 ;    dw 00000h                      ; End of list marker
 
-
-VIA_CX700_list:  ; Segmente und Registerwerte fr VIA CX700 + VX8xx + VX900 Chipsaetze (function 7+3)
+; Segments and Register Values for VIA CX700 + VX8xx + VX900 Chipsets (function 7+3)
+VIA_CX700_List:
     dw 0C000h, 10, 80h, VIA_RW0, 0
     dw 0C400h, 10, 80h, VIA_RW1, 0
     dw 0C800h, 10, 80h, VIA_RW2, 0
@@ -3053,11 +3097,13 @@ VIA_CX700_list:  ; Segmente und Registerwerte fr VIA CX700 + VX8xx + VX900 Chip
     dw 0FC00h, 10, 83h, VIA_RW2, 0
     dw 00000h                      ; End of list marker
 
+;-------------------------- END OF VIA CHIPSETS LIST --------------------------
 
-; ================================================================
 
+;------------------------- START OF SIS CHIPSETS LIST -------------------------
 
-SIS600xxList:  ; Segmente und Registerwerte fr SIS 6x0-PCI-Chips„tze
+; Segments and Register Values for SIS 6x0-PCI-Chipsets
+SIS600xx_List:
     dw 0C000h, 18, 70h, BIT_0, 72h, BIT_0, 149h, BIT_0, 0
     dw 0C400h, 18, 70h, BIT_1, 72h, BIT_1, 149h, BIT_1, 0
     dw 0C800h, 18, 70h, BIT_2, 72h, BIT_2, 149h, BIT_2, 0
@@ -3077,7 +3123,8 @@ SIS600xxList:  ; Segmente und Registerwerte fr SIS 6x0-PCI-Chips„tze
     dw 00000h                      ; End of list marker
 
 
-SIS600_List:  ; Segmente und Registerwerte fr SIS 6x0-PCI-Chips„tze
+; Segments and Register Values for SIS 6x0-PCI-Chipsets
+SIS600_List:
     dw 0C000h, 14, 70h, BIT_0, 72h, BIT_0, 0
     dw 0C400h, 14, 70h, BIT_1, 72h, BIT_1, 0
     dw 0C800h, 14, 70h, BIT_2, 72h, BIT_2, 0
@@ -3104,7 +3151,8 @@ SIS_RW_LO   equ 00A0Ah
 SIS_RW_HI   equ 0A0A0h
 ;--------------------------------------
 
-SIS59xList:  ; Segmente und Registerwerte fr SIS 5xxx-PCI-Chips„tze
+; Segments and Register Values for SIS 5xxx-PCI-Chipsets
+SIS59x_List:
     dw 0C000h, 0Eh, 70h, SIS_RW_HI, 149h, BIT_0, 0
     dw 0C400h, 0Eh, 70h, SIS_RW_LO, 149h, BIT_1, 0
     dw 0C800h, 0Eh, 71h, SIS_RW_HI, 149h, BIT_2, 0
@@ -3124,7 +3172,8 @@ SIS59xList:  ; Segmente und Registerwerte fr SIS 5xxx-PCI-Chips„tze
     dw 00000h                      ; End of list marker
 
 
-SIS597List:  ; Segmente und Registerwerte fr SIS 5xxx-PCI-Chips„tze
+; Segments and Register Values for SIS 5xxx-PCI-Chipsets
+SIS597_List:
     dw 0C000h, 0Eh, 70h, SIS_RW_HI, 149h, BIT_0, 0
     dw 0C400h, 0Eh, 70h, SIS_RW_LO, 149h, BIT_1, 0
     dw 0C800h, 0Eh, 71h, SIS_RW_HI, 149h, BIT_2, 0
@@ -3144,7 +3193,8 @@ SIS597List:  ; Segmente und Registerwerte fr SIS 5xxx-PCI-Chips„tze
     dw 00000h                      ; End of list marker
 
 
-SIS571List:  ; Segmente und Registerwerte fr SIS 5571-PCI-Chipsatz
+; Segments and Register Values for SIS 5571-PCI-Chipsets
+SIS571_List:
     dw 0C000h, 0Eh, 70h, SIS_RW_HI, 149h, BIT_0, 0
     dw 0C400h, 0Eh, 70h, SIS_RW_LO, 149h, BIT_1, 0
     dw 0C800h, 0Eh, 71h, SIS_RW_HI, 149h, BIT_2, 0
@@ -3164,7 +3214,8 @@ SIS571List:  ; Segmente und Registerwerte fr SIS 5571-PCI-Chipsatz
     dw 00000h                      ; End of list marker
 
 
-SIS511List:  ; Segmente und Registerwerte fr SIS 5511-PCI-Chipsatz
+; Segments and Register Values for SIS 5511-PCI-Chipsets
+SIS511_List:
     dw 0C000h, 0Eh, 80h, SIS_RW_HI, 149h, BIT_0, 0
     dw 0C400h, 0Eh, 80h, SIS_RW_LO, 149h, BIT_1, 0
     dw 0C800h, 0Eh, 81h, SIS_RW_HI, 149h, BIT_2, 0
@@ -3184,7 +3235,8 @@ SIS511List:  ; Segmente und Registerwerte fr SIS 5511-PCI-Chipsatz
     dw 00000h                      ; End of list marker
 
 
-SIS496List:  ; Segmente und Registerwerte fr SIS 496 Chipsatz
+; Segments and Register Values for SIS 496 Chipsets
+SIS496_List:
     dw 0C000h, 18, 44h, BIT_0, 45h, 0706h, 46h, BIT_0, 0
     dw 0C400h, 18, 44h, BIT_0, 45h, 0706h, 46h, BIT_0, 0
     dw 0C800h, 18, 44h, BIT_1, 45h, 0706h, 46h, BIT_1, 0
@@ -3204,7 +3256,8 @@ SIS496List:  ; Segmente und Registerwerte fr SIS 496 Chipsatz
     dw 00000h                      ; End of list marker
 
 
-SIS501List:  ; Segmente und Registerwerte fr SIS 501 Chipsatz
+; Segments and Register Values for SIS 501 Chipsets
+SIS501_List:
     dw 0C000h, 14, 56h, 8888h, 53h, 2000h, 0
     dw 0C400h, 14, 56h, 4444h, 53h, 2000h, 0
     dw 0C800h, 14, 56h, 2222h, 53h, 2000h, 0
@@ -3223,8 +3276,13 @@ SIS501List:  ; Segmente und Registerwerte fr SIS 501 Chipsatz
     dw 0FC00h, 10, 53h, 6040h, 0
     dw 00000h                      ; End of list marker
 
+;-------------------------- END OF SIS CHIPSETS LIST --------------------------
 
-ALI5List:  ; Segmente und Registerwerte fr ALI V
+
+;------------------------- START OF ALI CHIPSETS LIST -------------------------
+
+; Segments and Register Values for ALI V
+ALI5_List:
     dw 0C000h, 18, 56h, BIT_0, 58h, BIT_0, 5Ah, NOT_BIT_0, 0
     dw 0C400h, 18, 56h, BIT_1, 58h, BIT_1, 5Ah, NOT_BIT_1, 0
     dw 0C800h, 18, 56h, BIT_2, 58h, BIT_2, 5Ah, NOT_BIT_2, 0
@@ -3240,19 +3298,20 @@ ALI5List:  ; Segmente und Registerwerte fr ALI V
     dw 00000h                      ; End of list marker
 
 
-ALI2list:  ; Segmente und Registerwerte fr ALI II (1511)
- dw 0C000h, 18, 4Ah, BITS_2_1, 4Ch, BIT_0, 4Eh, NOT_BIT_0, 0 
- dw 0C400h, 18, 4Ah, BITS_2_1, 4Ch, BIT_1, 4Eh, NOT_BIT_0, 0 
- dw 0C800h, 18, 4Ah, BITS_2_1, 4Ch, BIT_2, 4Eh, NOT_BIT_1, 0 
- dw 0CC00h, 18, 4Ah, BITS_2_1, 4Ch, BIT_3, 4Eh, NOT_BIT_1, 0 
- dw 0D000h, 18, 4Ah, BITS_2_1, 4Ch, BIT_4, 4Eh, NOT_BIT_2, 0 
- dw 0D400h, 18, 4Ah, BITS_2_1, 4Ch, BIT_5, 4Eh, NOT_BIT_2, 0 
- dw 0D800h, 18, 4Ah, BITS_2_1, 4Ch, BIT_6, 4Eh, NOT_BIT_3, 0 
- dw 0DC00h, 18, 4Ah, BITS_2_1, 4Ch, BIT_7, 4Eh, NOT_BIT_3, 0 
- dw 0E000h, 18, 4Ah, BITS_2_1, 4Dh, BIT_0, 4Eh, NOT_BIT_4, 0 
- dw 0E400h, 18, 4Ah, BITS_2_1, 4Dh, BIT_1, 4Eh, NOT_BIT_4, 0 
- dw 0E800h, 18, 4Ah, BITS_2_1, 4Dh, BIT_2, 4Eh, NOT_BIT_5, 0 
- dw 0EC00h, 18, 4Ah, BITS_2_1, 4Dh, BIT_3, 4Eh, NOT_BIT_5, 0 
+; Segments and Register Values for ALI II (1511)
+ALI2_List:
+    dw 0C000h, 18, 4Ah, BITS_2_1, 4Ch, BIT_0, 4Eh, NOT_BIT_0, 0
+    dw 0C400h, 18, 4Ah, BITS_2_1, 4Ch, BIT_1, 4Eh, NOT_BIT_0, 0
+    dw 0C800h, 18, 4Ah, BITS_2_1, 4Ch, BIT_2, 4Eh, NOT_BIT_1, 0
+    dw 0CC00h, 18, 4Ah, BITS_2_1, 4Ch, BIT_3, 4Eh, NOT_BIT_1, 0
+    dw 0D000h, 18, 4Ah, BITS_2_1, 4Ch, BIT_4, 4Eh, NOT_BIT_2, 0
+    dw 0D400h, 18, 4Ah, BITS_2_1, 4Ch, BIT_5, 4Eh, NOT_BIT_2, 0
+    dw 0D800h, 18, 4Ah, BITS_2_1, 4Ch, BIT_6, 4Eh, NOT_BIT_3, 0
+    dw 0DC00h, 18, 4Ah, BITS_2_1, 4Ch, BIT_7, 4Eh, NOT_BIT_3, 0
+    dw 0E000h, 18, 4Ah, BITS_2_1, 4Dh, BIT_0, 4Eh, NOT_BIT_4, 0
+    dw 0E400h, 18, 4Ah, BITS_2_1, 4Dh, BIT_1, 4Eh, NOT_BIT_4, 0
+    dw 0E800h, 18, 4Ah, BITS_2_1, 4Dh, BIT_2, 4Eh, NOT_BIT_5, 0
+    dw 0EC00h, 18, 4Ah, BITS_2_1, 4Dh, BIT_3, 4Eh, NOT_BIT_5, 0
     dw 0F000h, 18, 4Ah, BITS_2_1, 4Dh, BIT_4, 4Eh, NOT_BIT_6, 0
     dw 0F400h, 18, 4Ah, BITS_2_1, 4Dh, BIT_5, 4Eh, NOT_BIT_6, 0
     dw 0F800h, 18, 4Ah, BITS_2_1, 4Dh, BIT_6, 4Eh, NOT_BIT_7, 0
@@ -3260,7 +3319,8 @@ ALI2list:  ; Segmente und Registerwerte fr ALI II (1511)
     dw 00000h                      ; End of list marker
 
 
-ALI3list:  ; Segmente und Registerwerte fr ALI III und IV
+; Segments and Register Values for ALI III and IV
+ALI3_List:
     dw 0C000h, 18, 4Ch, BIT_0, 4Eh, BIT_0, 50h, NOT_BIT_0, 0
     dw 0C400h, 18, 4Ch, BIT_1, 4Eh, BIT_1, 50h, NOT_BIT_1, 0
     dw 0C800h, 18, 4Ch, BIT_2, 4Eh, BIT_2, 50h, NOT_BIT_2, 0
@@ -3276,7 +3336,7 @@ ALI3list:  ; Segmente und Registerwerte fr ALI III und IV
     dw 00000h                      ; End of list marker
 
 
-ALIP2List:
+ALIP2_List:
     dw 0C000h, 10, 84h, BITS_5_4, 0 
     dw 0C400h, 10, 84h, BITS_7_6, 0 
     dw 0C800h, 10, 85h, BITS_1_0, 0 
@@ -3292,7 +3352,7 @@ ALIP2List:
     dw 00000h                      ; End of list marker
 
 
-ALIK7List:
+ALIK7_List:
     dw 0C000h, 10, 90h, BITS_1_0, 0 
     dw 0C400h, 10, 90h, BITS_3_2, 0 
     dw 0C800h, 10, 90h, BITS_5_4, 0 
@@ -3327,8 +3387,13 @@ ALI486_List:
     dw 0EC00h, 18, 14h, BIT_1, 14h, BITS_5_4, 17h, 80C0h, 0
     dw 00000h                      ; End of list marker
 
+;-------------------------- END OF ALI CHIPSETS LIST --------------------------
 
-PProList:  ; MTRR-Werte fr PPro
+
+;------------------------ START OF PPRO CHIPSETS LIST -------------------------
+
+; MTRR Values for PPro
+PProList:
     dw 0C000h, 14, 268h, Typ_06, Typ_06, 000h, 000h
     dw 0C400h, 14, 268h, 000h, 000h, Typ_06, Typ_06
     dw 0C800h, 14, 269h, Typ_06, Typ_06, 000h, 000h
@@ -3347,8 +3412,13 @@ PProList:  ; MTRR-Werte fr PPro
     dw 0FC00h, 14, 26Fh, 000h, 000h, Typ_06, Typ_06
     dw 00000h                      ; End of list marker
 
+;-------------------------- END OF PPRO CHIPSETS LIST -------------------------
 
-K7List:  ; MTRR-Register for K7, K8
+
+;------------------------------------------------------------------------------
+
+; MTRR Register for K7, K8
+K7_List:
     dw 0C000h, 6, 268h
     dw 0C800h, 6, 269h
     dw 0D000h, 6, 26Ah
@@ -3359,6 +3429,20 @@ K7List:  ; MTRR-Register for K7, K8
     dw 0F800h, 6, 26Fh
     dw 00000h                      ; End of list marker
 ;------------------------------------------------------------------------------
+
+;========================= END OF CHIPSETS CONFIG DATA ========================
+
+
+;;------------------------------------------------------------------------------
+;; Prints an Only Space
+;;------------------------------------------------------------------------------
+;Print_Space:
+;    push  dx                       ; Preserves DX for safety
+;    mov   ah,02h
+;    mov   dl,' '
+;    int   21h
+;    pop   dx                       ; Restores original DX value
+;    ret
 
 
 Set_PCI PROC NEAR                  ; SI=>Liste, BX= BUSDEV
@@ -3438,13 +3522,13 @@ Set_PCI ENDP
 ;-----------------------------------------------
 Set_PPro PROC NEAR 
     ;PPro programmieren
-    GetMSR 02FFh, MTRRdeftype, Dummy
+    GetMSR 02FFh, MTRR_Def_Type, Dummy
     ToggleCR0                          ; Cache Freeze
     wbinvd                             ; Write Back inv.
     ClearICache
 
     ;MTRR aus
-    mov   ebx,MTRRdeftype
+    mov   ebx,MTRR_Def_Type
     and   ebx,not 0800h
     SetMSR MSR_CONTROL, ebx, Dummy
 
@@ -3466,9 +3550,9 @@ Set_PPro PROC NEAR
     add   si,4                  ; SI auf Register
     xor   EAX, EAX
     mov   ax,WORD PTR [si]      ; MTRRnum nach AX
-    mov   MTRRnum,eax
+    mov   MTRR_Number,eax
 
-    GetMSR MTRRnum, MTRRvalLo, MTRRvalHi
+    GetMSR MTRR_Number, MTRR_Val_Lo, MTRR_Val_Hi
 
     ;zwei DWord-Werte aus der Liste holen
     add   si,2
@@ -3482,20 +3566,20 @@ Set_PPro PROC NEAR
     jz    @@ChangeLo
 
 @@ChangeHi:
-    mov   MTRRvalHi,edx
+    mov   MTRR_Val_Hi,edx
     jmp   @@EndChange
 
 @@ChangeLo:
-    mov   MTRRvalLo,eax
+    mov   MTRR_Val_Lo,eax
 
 @@EndChange:
-    SetMSR MTRRnum, MTRRvalLo, MTRRvalHi
+    SetMSR MTRR_Number, MTRR_Val_Lo, MTRR_Val_Hi
     clc                                    ; Alles OK
 
 @ProFertig:
     ;MTRR ein
     pushf
-    mov   ebx,MTRRdeftype
+    mov   ebx,MTRR_Def_Type
     or    ebx,0800h
     SetMSR MSR_CONTROL, ebx, Dummy
     ClearICache
@@ -3524,20 +3608,20 @@ K7_Open:
     wrmsr
 
 ;K7 programmieren
-    GetMSR 02FFh, MTRRdeftype, Dummy
+    GetMSR 02FFh, MTRR_Def_Type, Dummy
     ToggleCR0       ; Cache Freeze
     wbinvd          ; Write Back inv.
     ClearICache
 
 ;MTRR aus
-    mov   ebx,MTRRdeftype
+    mov   ebx,MTRR_Def_Type
     and   ebx,not 0800h
     SetMSR MSR_CONTROL, ebx, Dummy
 
 
 ;jetzt kanns losgehen...
 
-    mov   si,OFFSET K7List         ; Register-Liste
+    mov   si,OFFSET K7_List         ; Register-Liste
 
 @K7Sloop:
     mov   ax,WORD PTR [si]         ; Segment-Wert
@@ -3577,25 +3661,25 @@ ifdef K7DebugVersion
     call  Do_Print_Str
     popa
 endif
-	  
+
     xor   eax,eax
     mov   ax,WORD PTR [si + 4]     ; MTRRnum nach AX
-    mov   MTRRnum,eax
+    mov   MTRR_Number,eax
 
-    GetMSR MTRRnum, MTRRvalLo, MTRRvalHi
+    GetMSR MTRR_Number, MTRR_Val_Lo, MTRR_Val_Hi
 
 ifdef K7DebugVersion
     pusha
     mov   dx,OFFSET readstr
     call  Do_Print_Str
     mov   eax,0
-    mov   eax,MTRRnum
+    mov   eax,MTRR_Number
     call  PrHexDW
     call  PrStrich
-    mov   eax,MTRRvalLo
+    mov   eax,MTRR_Val_Lo
     call  PrHexDW
     call  PrStrich
-    mov   eax,MTRRvalHi
+    mov   eax,MTRR_Val_Hi
     call  PrHexDW
     mov   dx,OFFSET CR_LF$
     call  Do_Print_Str
@@ -3615,8 +3699,8 @@ endif
     shl   ebx,cl
     not   ebx
 
-    and   MTRRvalLo,ebx
-    or    MTRRvalLo,eax
+    and   MTRR_Val_Lo,ebx
+    or    MTRR_Val_Lo,eax
     jmp   @EndChange
 
 @K7PrgHiWord:
@@ -3628,8 +3712,8 @@ endif
     shl   ebx,cl
     not   ebx
 
-    and   MTRRvalHi,ebx
-    or    MTRRvalHi,eax
+    and   MTRR_Val_Hi,ebx
+    or    MTRR_Val_Hi,eax
     jmp   @EndChange
 
 
@@ -3639,26 +3723,26 @@ ifdef K7DebugVersion
     mov   dx,OFFSET writestr
     call  Do_Print_Str
 ;    mov   eax,0
-    mov   eax,MTRRnum
+    mov   eax,MTRR_Number
     call  PrHexDW
     call  PrStrich
-    mov   eax,MTRRvalLo
+    mov   eax,MTRR_Val_Lo
     call  PrHexDW
     call  PrStrich
-    mov   eax,MTRRvalHi
+    mov   eax,MTRR_Val_Hi
     call  PrHexDW
     mov   dx,OFFSET CR_LF_$
     call  Do_Print_Str
     popa
 endif
     
-    SetMSR MTRRnum, MTRRvalLo, MTRRvalHi
+    SetMSR MTRR_Number, MTRR_Val_Lo, MTRR_Val_Hi
     clc                            ; Alles OK
 
 @K7_Fertig:
     ; MTRR ein
     pushf
-    mov   ebx,MTRRdeftype
+    mov   ebx,MTRR_Def_Type
     or    ebx,0800h
     SetMSR MSR_CONTROL, ebx, Dummy
     ClearICache
@@ -3851,7 +3935,7 @@ Search_Device_1:
     push  dx
     mov   dx,OFFSET NoIntel$       ; Message
     call  Print_String
-    call  @Print_Device_IDs
+    call  Print_Device_IDs
     pop   dx
     stc                            ; Carry, da Fehler
     jmp   @Init_Exit
