@@ -58,26 +58,12 @@
 VERSION_STRING       equ 'V3.91beta4'
 DATE_STRING          equ '04/1996-05/2025'
 
+ESC_KEY              equ 1Bh
+
 ; Pentium (586) Instructions
 ;cpuid                equ db 0Fh, 0A2h
 ;rdmsr                equ db 0Fh, 032h
 ;wrmsr                equ db 0Fh, 030h
-
-;------------------------------------------------------------------------------
-; Vendors IDs Used on Code
-;------------------------------------------------------------------------------
-INTEL_ID             equ 8086h
-VIA_ID               equ 1106h
-SIS_ID               equ 1039h
-ALI_ID               equ 10B9h
-AMD_ID               equ 1022h
-OPTI_ID              equ 1045h
-UMC_ID               equ 1060h
-NV_ID                equ 10DEh
-SIO_ID               equ 0484h     ; SIO
-PIIX2_ID             equ 122Eh     ; PIIX, Function 0
-PIIX3_ID             equ 7000h     ; PIIX3, Function 0
-PIIX4_ID             equ 7110h     ; PIIX4, Function 0
 
 
 ;==============================================================================
@@ -156,7 +142,7 @@ UMB_Search:
     mov   bx,ax                    ; hold start segment
     lodsw
     cmp   bx,-1                    ; Already occupied?
-    jz    UMB_Search               ; -> Yes, let's check the next entry
+    je    UMB_Search               ; -> Yes, let's check the next entry
     cmp   ax,cx                    ; largest block so far?
     jb    Check_Size
     mov   cx,ax                    ; Yes, hold size
@@ -206,7 +192,7 @@ New_Chain:
 New_Ctrl:
     pushf
     cmp   ah,10h                   ; UMB request?
-    jz    UMB_Request              ; Flags on stack!
+    je    UMB_Request              ; Flags on stack!
     popf
     jmp   [XMS_Orginal_Jmp]        ; Otherwise goes to original XMS handler
 
@@ -468,7 +454,7 @@ Error_Out PROC NEAR
 
 Key_Out:
     cmp   SkipUkcMsg,1                        ; /S
-    jz    Release
+    je    Release
 
     mov   dx,OFFSET PressKey$                 ; Press any key... message
     call  Print_String
@@ -521,12 +507,12 @@ Test_K7:
     xor   di,di                    ; reg=0 -> vendor ID
     int   1Ah
     cmp   cx,8086h                 ; Intel vendor ID
-    jz    No_K7_CPU
+    je    No_K7_CPU
 
     ;kein Intel Chipsatz -> nach AMD K7 CPU suchen,
     ;dann haben wir eine BlockSize von 4, sonst 16KB
     cmp   Skip_K7_Test,1           ; param /7
-    jz    No_K7_CPU
+    je    No_K7_CPU
     call  Test_K7_CPU
     jnc   No_K7_CPU
     mov   K7_Found,1
@@ -543,7 +529,7 @@ Check_HIMEM:
     mov   ax,4300h                  ; Check whether HIMEM is installed
     int   2Fh
     cmp   al,80h                    ; HIMEM present?
-    jz    Get_XMS_Call              ; -> Yes
+    je    Get_XMS_Call              ; -> Yes
 
     ; No HIMEM found, so only enable memory
     mov   initOnly,1
@@ -565,7 +551,7 @@ Get_XMS_Call:
     mov   dx,0FFFh                 ; Request a 64-KByte block
     call  [XMS_Orginal_Jmp]
     cmp   bl,80h                   ; Not installed?
-    jz    Pre_Init_OK_Exit         ; -> OK
+    je    Pre_Init_OK_Exit         ; -> OK
     mov   dx,OFFSET UMBPresent$    ;
     stc                            ; Fail flag (Carry = 1)
     ret
@@ -610,16 +596,16 @@ Elem_7:
     mov   al,es:[di]
     inc   di
     cmp   al,13                         ; Carriage Return ?
-    jz    End_7                         ; -> yes, End
+    je    End_7                         ; -> yes, End
     cmp   al,10                         ; Line Feed ?
-    jz    End_7                         ; -> dito
+    je    End_7                         ; -> dito
     cmp   al,'/'                        ; Slash ?
-    jnz   Elem_7
+    jne   Elem_7
     mov   al,es:[di]                    ; Gets the next char
 
     ;------ /7 - suppress K7 test ------
     cmp   al,'7'
-    jnz   Elem_7
+    jne   Elem_7
     mov   Skip_K7_Test,1                ; Must be set before PREINIT
     mov   K7_Found,0
     mov   dx,OFFSET SkipK7Msg$
@@ -641,7 +627,7 @@ Cmd_Line:
     jnc   Test_Areas                    ; -> OK
 
     cmp   Param_Error,1
-    jnz   No_Param_Error
+    jne   No_Param_Error
     mov   dx,OFFSET BadCmd$
     jmp   Error_Out                    ; Output the command line
 
@@ -686,7 +672,7 @@ Test_Block:
     and   dx,WORD PTR es:[si + 4]
     and   dx,WORD PTR es:[si + 6]
     cmp   dx,0FFFFh
-    jz    @Next_Word
+    je    @Next_Word
 
 @Diff_Found:
     ;Difference found -> end of block
@@ -701,7 +687,7 @@ Test_Block:
 ;    mov   cx,0
     xor   cx,cx
     cmp   ax,s
-    jz    @End_Test_Block          ; Exit with CX = 0
+    je    @End_Test_Block          ; Exit with CX = 0
     mov   cx,ax
     sub   cx,s                     ; Length = address - start
 
@@ -1259,14 +1245,17 @@ Set_List ENDP
 Test_Start_Address PROC NEAR
     pusha
     cmp   dx,0C000h
-    jb    @EndTestSA
-    mov   ax,dx
-    mov   bx,Block_Size
-    xor   dx,dx
-    div   bx
-    cmp   dx,0
+;    jb    @EndTestSA
+    jb    @@TSA_End
+;    mov   ax,dx
+;    mov   bx,Block_Size
+;    xor   dx,dx
+;    div   bx
+;    cmp   dx,0
+    call  Test_Address_Common
 
-@EndTestSA:
+;@EndTestSA:
+@@TSA_End:    
     popa
     ret
 
@@ -1276,19 +1265,32 @@ Test_Start_Address ENDP
 Test_End_Address PROC NEAR
     pusha
     cmp   dx,0FFFFh
-    jg    @EndTestEA
+;    jg    @End_Test_EA
+    jg    @@TEA_End
     add   dx,1
+;    mov   ax,dx
+;    mov   bx,Block_Size
+;    xor   dx,dx                    ; DX must clear to divide
+;    div   bx
+;    cmp   dx,0
+    call  Test_Address_Common
+
+;@End_Test_EA:
+@@TEA_End:
+    popa
+    ret
+
+Test_End_Address ENDP
+
+
+; This Routine is Common to Test_Start_Address and Test_End_Address
+Test_Address_Common:
     mov   ax,dx
     mov   bx,Block_Size
     xor   dx,dx                    ; DX must clear to divide
     div   bx
     cmp   dx,0
-
-@EndTestEA:
-    popa
     ret
-
-Test_End_Address ENDP
 
 
 ;----------------------------- Strings for AMD K7 -----------------------------
@@ -1532,7 +1534,7 @@ SetMSR MACRO MSR, MSRValLo, MSRValHi
 ifdef P2DebugVersion
     pusha
     cmp   MSRValHi,0
-;    jz    lbl11
+;    je    lbl11
     mov   dx,OFFSET schreibe
     call  Do_Print_Str
     mov   eax,msr
@@ -3455,11 +3457,11 @@ Set_PCI PROC NEAR                  ; SI=>Liste, BX= BUSDEV
     jz    @fertig                  ; Exit mit Carry
     mov   dx,es
     cmp   dx,ax
-    jz    @found
+    je    @Found
     add   si,WORD PTR [si + 2]
     jmp   @Sloop
 
-@found:
+@Found:
     mov   ax,es
 
 ifdef DebugVersion
@@ -3483,7 +3485,7 @@ endif
     jz    @fertig
     mov   bx,Bus_Dev_0             ; Bus+DEV+Func of the first PCI device from the table
     cmp   ah,1                     ; Kennung fÅr: use BusDev1
-    jnz   @Keep_Bus_Dev_0          ;
+    jne   @Keep_Bus_Dev_0          ;
     mov   bx,Bus_Dev_1             ; Bus+DEV+Func
 
 @Keep_Bus_Dev_0:
@@ -3542,7 +3544,7 @@ Set_PPro PROC NEAR
     jz    @ProFertig               ; Exit with Carry
     mov   dx,es
     cmp   dx,ax
-    jz    @Pro_Found
+    je    @Pro_Found
     add   si,WORD PTR [si + 2]     ; SI auf nÑchsten Segment-Wert
     jmp   @ProSloop
 
@@ -3563,7 +3565,7 @@ Set_PPro PROC NEAR
     ;wenn EDX=FF dann mu· Lo durch neuen Wert ersetzt werden,
     ;sonst Hi
     cmp   edx,0
-    jz    @@ChangeLo
+    je    @@ChangeLo
 
 @@ChangeHi:
     mov   MTRR_Val_Hi,edx
@@ -3632,7 +3634,7 @@ K7_Open:
     mov   Shift_Left_Count,0       ; SHR fuer den neuen MTRR-Wert (18h)
     mov   dx,es                    ; die gesuchte Adresse (C800h oder sowas)
     cmp   ax,dx
-    jz    @K7_Found
+    je    @K7_Found
     jg    @K7NextSegFound
     add   si,WORD PTR [si+2]       ; SI auf nÑchsten Segment-Wert
     jmp   @K7Sloop
@@ -3649,7 +3651,7 @@ K7_Open:
     add   Shift_Left_Count,8       ; weitere 8 Bit nach links
     add   ax,100h
     cmp   dx,ax
-    jnz   @K7SearchSegLoop
+    jne   @K7SearchSegLoop
 
 @K7_Found:
     ; ermittelt
@@ -3795,7 +3797,7 @@ Next_ID:
     xor   si,si
     mov   dx, WORD PTR [di]        ; Get Vendor ID
     cmp   dx,0                     ; End of list?
-    jz    @No_Supported_Chipset    ; Chipset not identified
+    je    @No_Supported_Chipset    ; Chipset not identified
     mov   cx,WORD PTR [di + 2]     ; Get Device ID
 
 ifdef DebugVersion
@@ -3833,7 +3835,7 @@ endif
 Search_Device_1:
     mov   cx,WORD PTR [di + 4]
     cmp   cx,0
-    jz    @Skip_Device_1
+    je    @Skip_Device_1
     mov   ax,0B102h                ; Find PCI device
     int   1Ah
 
@@ -3865,25 +3867,25 @@ Search_Device_1:
 ;    pushf
 
     cmp   Untested,0
-    jz    @Is_Tested
+    je    @Is_Tested
 
     cmp   Untested,UNSUPPORTED_UNTESTED            ;1
-    jz    @UnTested
+    je    @UnTested
 
     cmp   Untested, UNSUPPORTED_NO_DATASHEET       ;2
-    jz    @UnSupp2
+    je    @UnSupp2
 
     cmp   Untested, UNSUPPORTED_NO_SHADOW_RAM      ;3
-    jz    @UnSupp3
+    je    @UnSupp3
 
     cmp   Untested, UNSUPPORTED_CONFIG_MECHANISM   ;4
-    jz    @UnSupp4
+    je    @UnSupp4
 
     cmp   Untested,UNSUPPORTED_WRONG_DOC           ;5
-    jz    @UnSupp5
+    je    @UnSupp5
 
     cmp   Untested,UNSUPPORTED_NO_HOST_BRIDGE      ;6
-    jz    @UnSupp6
+    je    @UnSupp6
     
     jmp   @Init_Cancel
 
@@ -3920,8 +3922,9 @@ Search_Device_1:
 ;    mov   ax,00h
     xor   ax,ax
     int   16h
-    cmp   al,27                    ; ESC pressed ???
-    jnz   @Is_Tested
+;    cmp   al,27                    ; ESC pressed ???
+    cmp   al,ESC_KEY               ; ESC pressed ???
+    jne   @Is_Tested
     mov   dx,OFFSET Canceled$      ; Abgebrochen ausgeben
     jmp   @Init_Cancel
 
