@@ -8,6 +8,8 @@
 ; Extended version by Uwe Sieber from 04/1996
 ; (mail@uwe-sieber.de)
 ;
+;                        *** Nasm Version ***
+;
 ; /7 : Use external chipset even w/ AMD K7. (by Ninho), 01/09
 ;
 ; Thanks to Uwe Milde (PPro support) as well as Sergei Shtylyov
@@ -234,6 +236,8 @@ TYP_06                        equ 0606h
 TYP_18                        equ 1818h
 MSR_CONTROL                   equ 02FFh
 
+CARRIAGE_RETURN               equ 0Dh
+LINE_FEED                     equ 0Ah
 ESC_KEY                       equ 1Bh
 
 
@@ -282,7 +286,7 @@ ifdef K7DebugVersion
   writestr     db 'write: $'
 endif
 
-Param_Addr     dd ?                ; Buffer for INIT parameter block
+Param_Addr     dd ?                  ; Buffer for INIT parameter block
 
 initOnly       db 0
 
@@ -290,11 +294,10 @@ initOnly       db 0
 ;==============================================================================
 ; Strategy Routine, saves ES:BX (Parameter Block Address)
 ;==============================================================================
-Strategy_Routine PROC FAR
+Strategy_Routine:
     mov   WORD PTR [Param_Addr],bx
     mov   WORD PTR [Param_Addr + 2],es
     retf
-Strategy_Routine ENDP
 
 
 ;== Apr/08/2004 Nagatoshi Uehara ==;
@@ -307,7 +310,7 @@ Saved_Stack  dw  0, 0
 ;==============================================================================
 ; Interrupt Routine, defines only the INIT function
 ;==============================================================================
-Interrupt_Routine PROC FAR
+Interrupt_Routine:
 
 ifdef DebugVersion
     int   03h                      ; DEBUG TRAP (Ninho)
@@ -332,12 +335,12 @@ endif
     mov   es:[bx + IR_Status],8103h ; pessimistic approach
     mov   al,es:[bx + IR_Function]  ; function number
     or    al,al                     ; Init?
-    jnz   Other_Cmd                 ; code "command unknown" set
+    jnz   IR_Other_Cmd              ; code "command unknown" set
     call  Init_Function             ; INIT - delivers status in AX
     les   bx,[Param_Addr]
     mov   es:[bx + IR_Status],ax
 
-Other_Cmd:
+IR_Other_Cmd:
     popf
     pop   es
     pop   bx
@@ -345,7 +348,7 @@ Other_Cmd:
 
 ;================================================
 ;    **** Apr/08/2004 Nagatoshi Uehara ****
-; Restores SS:SP
+; Restores Original SS:SP
 ; -----------------------------------------------
     mov   sp,cs:WORD PTR [Saved_Stack]     ; Lo
     mov   ss,cs:WORD PTR [Saved_Stack][2]  ; Hi
@@ -353,13 +356,11 @@ Other_Cmd:
 
     retf
 
-Interrupt_Routine ENDP
-
 
 ;==============================================================================
 ; Waits a Key Pressing
 ;==============================================================================
-Wait4Key:
+Wait_Key:
     pusha                                  ; Saves all registers
 ;    mov   dx,OFFSET PressKey$
 ;    call  Print_String
@@ -368,20 +369,24 @@ Wait4Key:
     popa                                   ; Restores all registers
     ret
 
+
 Print_Dash_Char:
     pusha
     mov   dx,OFFSET Dash_Char_$
     jmp   Do_Print_And_Restore_Registers
+
 
 Print_Comma:
     pusha
     mov   dx,OFFSET Comma_$
     jmp   Do_Print_And_Restore_Registers
 
+
 Print_CRLF:
     pusha
     mov   dx,OFFSET CR_LF_$
 ;    jmp   Do_Print_And_Restore_Registers
+
 
 Do_Print_And_Restore_Registers:
     mov   ah,09h
@@ -451,11 +456,11 @@ endif
 ; Display an Error Message Using DOS Function $09 and Abort
 ; Called with DS:DX = message text
 ;------------------------------------------------------------------------------
-Error_Out PROC NEAR
+Error_Out:
     call  Print_String                        ; Show text
 
 Key_Out:
-    cmp   SkipUkcMsg,1                        ; /S
+    cmp   word ptr [SkipUkcMsg],1             ; /S
     je    Release
 
     mov   dx,OFFSET PressKey$                 ; Press any key... message
@@ -465,16 +470,14 @@ Key_Out:
 
 Release:
     les   bx,[Param_Addr]
-    mov   WORD PTR es:[bx + IR_EndAddress],0  ; 0 bytes required
+    mov   word ptr es:[bx + IR_EndAddress],0  ; 0 bytes required
     mov   ax,8100h                            ; Error (unspecified)
     jmp   Init_End
-
-Error_Out ENDP
 ;------------------------------------------------------------------------
 
 
 ;------------------------------------------------------------------------
-Pre_Init_Function PROC NEAR
+Pre_Init_Function:
 ;    mov   ax,0B101h                ; Check PCI BIOS presence
 ;    int   1Ah
 ;    jc    @PIF_No_PCI_BIOS         ; PCI Bios not present (PIF stands for Pre_Initi_Function)
@@ -487,7 +490,7 @@ Pre_Init_Function PROC NEAR
 
 ;@PIF_No_PCI_BIOS:
     mov   dx,OFFSET NoPCI$         ; No PCI message
-;    stc                            ; Fail flag (Carry = 1) *Carry Flag returnd set by the Check_PCI_BIOS routine
+    stc                            ; Fail flag (Carry = 1)
     ret                            ; No PCI BIOS -> abort
 
 @PIF_PCI_BIOS_Found:
@@ -518,8 +521,8 @@ Test_K7:
     call  Test_K7_CPU
     jnc   No_K7_CPU
     mov   K7_Found,1
-    mov   Block_Size,100h
-    mov   BlockSizeShR,8
+    mov   word ptr [Block_Size],100h
+    mov   byte ptr [BlockSizeShR],8
 
 No_K7_CPU:
 
@@ -534,7 +537,7 @@ Check_HIMEM:
     je    Get_XMS_Call              ; -> Yes
 
     ; No HIMEM found, so only enable memory
-    mov   initOnly,1
+    mov   byte ptr [initOnly],1
     clc                            ; OK (Carry = 0)
     ret                            ; Continue without HIMEM
 
@@ -545,8 +548,8 @@ Check_HIMEM:
 Get_XMS_Call:
     mov   ax,4310h                 ; HIMEM: Entry address
     int   2Fh
-    mov   WORD PTR [XMS_Original_Jmp],bx
-    mov   WORD PTR [XMS_Original_Jmp + 2],es
+    mov   word ptr [XMS_Original_Jmp],bx
+    mov   word ptr [XMS_Original_Jmp + 2],es
 
     ; UMB server already exists?
     mov   ah,16
@@ -561,8 +564,6 @@ Get_XMS_Call:
 Pre_Init_OK_Exit:
     clc                            ; All OK (Carry = 0)
     ret
-
-Pre_Init_Function ENDP
 ;-----------------------------------------------
 
 
@@ -570,7 +571,7 @@ Pre_Init_Function ENDP
 ; Initialization - called with ES:DI = parameter block and ES, BX, AX/flags
 ; on the stack, so there is no need to preserve these registers.
 ;------------------------------------------------------------------------------
-Init_Function PROC NEAR
+Init_Function:
     push  cx
     push  dx
     push  si
@@ -580,8 +581,8 @@ Init_Function PROC NEAR
     push  cs
     pop   ds                       ; DS = code segment
 
-    mov   WORD PTR es:[bx + IR_EndAddress],OFFSET CR_LF_$
-    mov   WORD PTR es:[bx + IR_EndAddress + 2],cs  ; Store end address
+    mov   word ptr es:[bx + IR_EndAddress],OFFSET CR_LF_$
+    mov   word ptr es:[bx + IR_EndAddress + 2],cs  ; Store end address
     mov   dx,OFFSET Copyright$                     ; "Gruess Gott"
     call  Print_String
     mov   dx,OFFSET Changed$                       ; "Gress Gott2"
@@ -597,9 +598,9 @@ Init_Function PROC NEAR
 Elem_7:
     mov   al,es:[di]
     inc   di
-    cmp   al,13                         ; Carriage Return ?
+    cmp   al,CARRIAGE_RETURN            ; Carriage Return ?
     je    End_7                         ; -> yes, End
-    cmp   al,10                         ; Line Feed ?
+    cmp   al,LINE_FEED                  ; Line Feed ?
     je    End_7                         ; -> dito
     cmp   al,'/'                        ; Slash ?
     jne   Elem_7
@@ -680,7 +681,7 @@ Test_Block:
     ;Difference found -> end of block
     mov   ax,es                    ; Current address
     push  bx
-    mov   bx,Block_Size
+    mov   bx,[Block_Size]
     xor   dx,dx                    ; clears DX before division
     div   bx
     mul   bx                       ; Round down to the nearest 4K or 16K boundary
@@ -702,15 +703,17 @@ Test_Block:
 
 Test_Areas:
     ;AMD K7/K8 work without a chipset :-)
-    cmp   K7_Found,1
+    cmp   word ptr [K7_Found],1
     je    Test_All_UMB_Blocks
 
 
 No_K7_CPU2:
+
 ifdef DebugVersion
     int   03h                      ;;; (Ninho) DEBUG 2
 endif
-    call  INIT_Chipset             ; Get and show chipset found
+    
+    call  Init_Chipset             ; Get and show chipset found
     jc    Key_Out                  ; Message already displayed
 
 Test_All_UMB_Blocks:
@@ -719,6 +722,7 @@ Test_All_UMB_Blocks:
     cld
 
 Next_UMB:
+
 ifdef DebugVersion
     int   03h                      ;;; (Ninho) DEBUG 3
 endif
@@ -726,7 +730,6 @@ endif
     lodsw                          ; Start address
     or    ax,ax                    ; End of list reached?
     jz    Areas_Tested              ; Yes. Then done
-
     mov   es,ax                    ; Start address in ES
     lodsw                          ; Size (paragraphs)
     mov   cl,BlockSizeShR          ; Convert to 16K/4K blocks
@@ -874,15 +877,13 @@ Init_End:
     pop   dx
     pop   cx
     ret
-
-Init_Function ENDP
-;------------------------------------------------------------------------------
+;----------------------------- INIT FUNCTION END ------------------------------
 
 
 ;------------------------------------------------------------------------------
 ; Search for Free Areas, Return with UMBs_List Filled and Carry Set or Cleared
 ;------------------------------------------------------------------------------
-Scan_Areas PROC NEAR
+Scan_Areas:
     xor   bx,bx                            ; Initialize UMB_List index
     mov   ax,0C000h                        ; First block
 
@@ -946,9 +947,7 @@ Scan_Areas PROC NEAR
 List_Set_2:
     sub   bx,1                             ; Set Carry if BX = 0
     ret
-
-Scan_Areas ENDP
-;--------------------------------------------------------------------------
+;------------------------------ SCAN_AREAS END --------------------------------
 
 
 ;allhier$          db 'Ick bin allhier!$'
@@ -961,6 +960,7 @@ Scan_Areas ENDP
 ;    ret
 
 
+;include "MESSAGES.INC"
 ifdef EnglVersion
   Copyright$       db 'UMBPCI c''t 11/95 - Siering/Sch„pers/Stiller$'
   Changed$         db ''
@@ -1120,7 +1120,7 @@ ifdef DebugVersion2
   Step3            db 'Step3',13,10,'$'
   Step4            db 'Step4',13,10,'$'
 endif
-
+;----------------------------- END OF MESSAGES --------------------------------
 
 ; Called with ES:DI pointing into the command line
 ; Returns with DI+4, value or 0 in DX, and Z flag cleared/set
@@ -1169,7 +1169,7 @@ Dig_Done:
 ; Parse the command line. Called with ES:DI = command line,
 ; returns with UMBList set and Carry set/cleared
 ;------------------------------------------------------------------------------
-Set_List PROC NEAR
+Set_List:
     xor   bx,bx                    ; Index in UMBs_List
 
 Do_Elem:
@@ -1240,11 +1240,10 @@ List_Error:
 List_Set:
     sub   bx,1                     ; Set Carry if BX = 0
     ret
+;------------------------------- Set_List END ---------------------------------
 
-Set_List ENDP
 
-
-Test_Start_Address PROC NEAR
+Test_Start_Address:
     pusha
     cmp   dx,0C000h
 ;    jb    @EndTestSA
@@ -1261,10 +1260,8 @@ Test_Start_Address PROC NEAR
     popa
     ret
 
-Test_Start_Address ENDP
 
-
-Test_End_Address PROC NEAR
+Test_End_Address:
     pusha
     cmp   dx,0FFFFh
 ;    jg    @End_Test_EA
@@ -1282,8 +1279,6 @@ Test_End_Address PROC NEAR
 @@TEA_End:
     popa
     ret
-
-Test_End_Address ENDP
 
 
 ; This Routine is Common to Test_Start_Address and Test_End_Address
@@ -1466,23 +1461,22 @@ Print_Device_IDs:
 ;------------------------------------------------------------------------------
 ; Checks for PCI BIOS (Returns Carry = 0 if Present, Otherwise Carry = 1)
 ;------------------------------------------------------------------------------
-Check_PCI_BIOS PROC NEAR
+Check_PCI_BIOS:
     mov   ax,0B101h
     int   1Ah
-    jc    @CPB_No_PCI_BIOS         ; PCI Bios not present (CPB stands for Check_PCI_BIOS)
+    jc    CPB_No_PCI_BIOS          ; PCI Bios not present (CPB stands for Check_PCI_BIOS)
     cmp   ah,0
-    jne   @CPB_No_PCI_BIOS         ; PCI Bios not present (CPB stands for Check_PCI_BIOS)
+    jne   CPB_No_PCI_BIOS          ; PCI Bios not present (CPB stands for Check_PCI_BIOS)
     cmp   dx,4350h
-    je    @CPB_PCI_BIOS_Found      ; PCI BIOS is present, so continue (CPB stands for Check_PCI_BIOS)
+    je    CPB_PCI_BIOS_Found       ; PCI BIOS is present, so continue (CPB stands for Check_PCI_BIOS)
 
-@CPB_No_PCI_BIOS:
+CPB_No_PCI_BIOS:
     stc                            ; No PCI BIOS found (Carry flag = 1)
     ret
 
-@CPB_PCI_BIOS_Found:
+CPB_PCI_BIOS_Found:
     clc                            ; PCI BIOS found (Carry flag = 0)
     ret
-Check_PCI_BIOS ENDP
 
 
 ;==============================================================================
@@ -3451,7 +3445,7 @@ K7_List:
 ;    ret
 
 
-Set_PCI PROC NEAR                  ; SI=>Liste, BX= BUSDEV
+Set_PCI:                           ; SI=>Liste, BX= BUSDEV
     mov   si,liste                 ; Register-Liste
 
 @Sloop:
@@ -3520,13 +3514,11 @@ ifdef DebugVersion
 endif
 
     ret
-
-Set_PCI ENDP
-;-----------------------------------------------
+;------------------------------- Set_PCI END ----------------------------------
 
 
 ;-----------------------------------------------
-Set_PPro PROC NEAR 
+Set_PPro: 
     ;PPro programmieren
     GetMSR 02FFh, MTRR_Def_Type, Dummy
     ToggleCR0                          ; Cache Freeze
@@ -3592,8 +3584,7 @@ Set_PPro PROC NEAR
     ToggleCR0                              ; Cache Freeze
     popf
     ret
-
-Set_PPro ENDP
+;-------------------------------- Set_PPro END --------------------------------
 
 
 ;==============================================================================
@@ -3603,7 +3594,7 @@ strseg            db 'seg  : $'
 Shift_Left_Count  db 0             ; Shift left counter variable
 
 
-Set_K7 PROC NEAR 
+Set_K7:
     pusha
     cli
 
@@ -3615,8 +3606,8 @@ K7_Open:
 
 ;K7 programmieren
     GetMSR 02FFh, MTRR_Def_Type, Dummy
-    ToggleCR0       ; Cache Freeze
-    wbinvd          ; Write Back inv.
+    ToggleCR0                      ; Cache Freeze
+    wbinvd                         ; Write Back inv.
     ClearICache
 
 ;MTRR aus
@@ -3627,7 +3618,7 @@ K7_Open:
 
 ;jetzt kanns losgehen...
 
-    mov   si,OFFSET K7_List         ; Register-Liste
+    mov   si,OFFSET K7_List        ; Register-Liste
 
 @K7Sloop:
     mov   ax,WORD PTR [si]         ; Segment-Wert
@@ -3635,7 +3626,7 @@ K7_Open:
     stc
     jz    @K7_Fertig               ; Exit with Carry
 
-    mov   Shift_Left_Count,0       ; SHR fuer den neuen MTRR-Wert (18h)
+    mov   byte ptr [Shift_Left_Count],0  ; SHR fuer den neuen MTRR-Wert (18h)
     mov   dx,es                    ; die gesuchte Adresse (C800h oder sowas)
     cmp   ax,dx
     je    @K7_Found
@@ -3652,7 +3643,7 @@ K7_Open:
 
 ; von hier aus 100h (4K) vorw„rts bis =ES
 @K7SearchSegLoop:
-    add   Shift_Left_Count,8       ; weitere 8 Bit nach links
+    add   byte ptr [Shift_Left_Count],8  ; weitere 8 Bit nach links
     add   ax,100h
     cmp   dx,ax
     jne   @K7SearchSegLoop
@@ -3670,7 +3661,7 @@ endif
 
     xor   eax,eax
     mov   ax,WORD PTR [si + 4]     ; MTRRnum nach AX
-    mov   MTRR_Number,eax
+    mov   [MTRR_Number],eax
 
     GetMSR MTRR_Number, MTRR_Val_Lo, MTRR_Val_Hi
 
@@ -3679,13 +3670,13 @@ ifdef K7DebugVersion
     mov   dx,OFFSET readstr
     call  Do_Print_Str
     mov   eax,0
-    mov   eax,MTRR_Number
+    mov   eax,[MTRR_Number]
     call  PrHexDW
     call  PrStrich
-    mov   eax,MTRR_Val_Lo
+    mov   eax,[MTRR_Val_Lo]
     call  PrHexDW
     call  PrStrich
-    mov   eax,MTRR_Val_Hi
+    mov   eax,[MTRR_Val_Hi]
     call  PrHexDW
     mov   dx,OFFSET CR_LF$
     call  Do_Print_Str
@@ -3698,19 +3689,19 @@ endif
 
 
 @K7PrgLoWord:
-    mov   cl,Shift_Left_Count
+    mov   cl,[Shift_Left_Count]
     mov   eax,1Eh
     shl   eax,cl
     mov   ebx,0FFh                 ; Mask
     shl   ebx,cl
     not   ebx
 
-    and   MTRR_Val_Lo,ebx
-    or    MTRR_Val_Lo,eax
+    and   [MTRR_Val_Lo],ebx
+    or    [MTRR_Val_Lo],eax
     jmp   @EndChange
 
 @K7PrgHiWord:
-    mov   cl,Shift_Left_Count
+    mov   cl,[Shift_Left_Count]
     sub   cl,32
     mov   eax,1Eh
     shl   eax,cl
@@ -3718,8 +3709,8 @@ endif
     shl   ebx,cl
     not   ebx
 
-    and   MTRR_Val_Hi,ebx
-    or    MTRR_Val_Hi,eax
+    and   [MTRR_Val_Hi],ebx
+    or    [MTRR_Val_Hi],eax
     jmp   @EndChange
 
 
@@ -3729,13 +3720,13 @@ ifdef K7DebugVersion
     mov   dx,OFFSET writestr
     call  Do_Print_Str
 ;    mov   eax,0
-    mov   eax,MTRR_Number
+    mov   eax,[MTRR_Number]
     call  PrHexDW
     call  PrStrich
-    mov   eax,MTRR_Val_Lo
+    mov   eax,[MTRR_Val_Lo]
     call  PrHexDW
     call  PrStrich
-    mov   eax,MTRR_Val_Hi
+    mov   eax,[MTRR_Val_Hi]
     call  PrHexDW
     mov   dx,OFFSET CR_LF_$
     call  Do_Print_Str
@@ -3748,7 +3739,7 @@ endif
 @K7_Fertig:
     ; MTRR ein
     pushf
-    mov   ebx,MTRR_Def_Type
+    mov   ebx,[MTRR_Def_Type]
     or    ebx,0800h
     SetMSR MSR_CONTROL, ebx, Dummy
     ClearICache
@@ -3763,8 +3754,7 @@ K7_Close:
     sti
     popa
     ret
-
-Set_K7 ENDP
+;------------------------------- Set_K7 END -----------------------------------
 
 
 ;==============================================================================
@@ -3772,7 +3762,7 @@ Set_K7 ENDP
 Found_Vendor_ID     dw 0000h       ;
 Found_Device_ID     dw 0000h       ;
 
-Init_Chipset PROC NEAR
+Init_Chipset:
     ;Get Vendor-ID Host-Bridge
 ;    mov   di,0                     ; Reg.0 = Vendor-ID
 ;    mov   bx,0                     ; Dev,Func,Bus=0
@@ -3780,14 +3770,14 @@ Init_Chipset PROC NEAR
     xor   bx,bx                    ; Dev,Func,Bus=0
     mov   ax,0B109h                ; Read word
     int   1Ah
-    mov   Found_Vendor_ID,cx
+    mov   [Found_Vendor_ID],cx
 
     ;Get Device-ID Host-Bridge
     mov   di,02h                   ; Reg.2 = Device-ID
     mov   bx,00h                   ; Dev,Func,Bus=0
     mov   ax,0B109h                ; Read word
     int   1Ah
-    mov   Found_Device_ID,cx
+    mov   [Found_Device_ID],cx
 
 ;------------------------------------------------------------------------------
 ; Scan the Chipset List
@@ -3961,12 +3951,10 @@ Search_Device_1:
 
 @Init_Exit:
     ret
-
-Init_Chipset ENDP
-;----------------------------------------------------------
+;----------------------------- Init_Chipset END -------------------------------
 
 
-Test_K7_CPU PROC NEAR
+Test_K7_CPU:
     pusha
 
     ; K7/K8 suchen, zuerst AMD-CPU suchen
@@ -4041,12 +4029,11 @@ No_AMD_CPU:
 @End_Test_K7_CPU:
     popa
     ret
-
-Test_K7_CPU ENDP
+;----------------------------- Test_K7_CPU END --------------------------------
 
 
 ;----------------------------------------------------------
-Set_Chipset PROC NEAR
+Set_Chipset:
     pusha
     call  Set_PCI
     jc    @Set_Error
@@ -4072,12 +4059,11 @@ Set_Chipset PROC NEAR
 @Set_Error:
     popa
     ret
-
-Set_Chipset ENDP
+;----------------------------- Set_Chipset END --------------------------------
 
 
 ;----------------------------------------------------------
-Init_RAM_4KB PROC NEAR
+Init_RAM_4KB:
     pusha
 ;    mov   di,0                     ; disable parity check
     xor   di,di                    ; disable parity check
@@ -4097,8 +4083,7 @@ Init_RAM_4KB PROC NEAR
     clc
     popa
     ret
-
-Init_RAM_4KB ENDP
+;---------------------------- Init_RAM_4KB END --------------------------------
 
 
 END
