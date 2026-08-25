@@ -35,8 +35,8 @@
 ;------------------------------------------------------------------------------
 ; Compilation Modifiers
 ;------------------------------------------------------------------------------
-;EnglVersion     equ 1             ; Driver compiled in English
-;DebugVersion    equ 1
+;ENG             equ 1             ; Driver compiled in English
+;DebugVersion1   equ 1
 ;DebugVersion2   equ 1
 ;P2DebugVersion  equ 1
 ;K7DebugVersion  equ 1
@@ -59,11 +59,6 @@
 ;==============================================================================
 VERSION_STRING       equ 'V3.91beta4'
 DATE_STRING          equ '04/1996-05/2025'
-
-; Pentium (586) Instructions
-;cpuid                equ db 0Fh, 0A2h
-;rdmsr                equ db 0Fh, 032h
-;wrmsr                equ db 0Fh, 030h
 
 
 ;==============================================================================
@@ -152,7 +147,7 @@ Check_Size:
     jb    UMB_Search               ; -> No, then go to the next block
 
 Free_UMB_Found:
-    mov   WORD PTR [si - 4],-1     ; Marks the block as allocated
+    mov   word ptr [si - 4],-1     ; Marks the block as allocated
     mov   dx,ax                    ; Size in DX, segment in BX
     pop   ax                       ; Old BX from stack
     mov   ax,1                     ; Signals success
@@ -180,7 +175,7 @@ UMB_Request ENDP
 ;------------------------------------------------------------------------------
 ; Original HIMEM.SYS Chain (Changed on loading to support the UMBPCI)
 ;------------------------------------------------------------------------------
-XMS_Original_Jmp     dd ?          ; HIMEM original address
+xms_original_jmp     dd ?          ; HIMEM original address
 
 
 New_Chain:
@@ -194,7 +189,7 @@ New_Ctrl:
     cmp   ah,10h                   ; UMB request?
     je    UMB_Request              ; Flags on stack!
     popf
-    jmp   [XMS_Original_Jmp]       ; Otherwise goes to original XMS handler
+    jmp   [xms_original_jmp]       ; Otherwise goes to original XMS handler
 
 ifdef TestStack
   db  ('FSTACK7890ABCDEF')
@@ -244,11 +239,11 @@ ESC_KEY                       equ 1Bh
 ;=========================================
 ; Buffers for Non Resident Code
 ;=========================================
-Hex_Digits     db '0123456789ABCDEF' ; Ausgabe einer Hex-Zahl mit vier Stellen (AX)
-CR_LF_$        db 13,10,'$'          ; CRLF also marks the end of the resident part!
+hex_digits     db '0123456789ABCDEF' ; Ausgabe einer Hex-Zahl mit vier Stellen (AX)
+CR_LF_dollar   db 13,10,'$'          ; CRLF also marks the end of the resident part!
 
 SkipUkcMsg     dw 0
-Skip_K7_Test   dw 0                  ;  '/7' command line param (Ninho)
+skip_k7_test   dw 0                  ;  '/7' command line param (Ninho)
 
 Liste          dw 0
 Bus_Dev_0      dw 0
@@ -256,7 +251,7 @@ Bus_Dev_1      dw 0
 
 Found_Chip     dw 0
 PPro_Found     dw 0
-K7_Found       dw 0
+k7_found       dw 0
 Untested       dw 0
 
 Param_Error    dw 0
@@ -267,14 +262,14 @@ MTRR_Number    dd 0
 MTRR_Val_Lo    dd 0
 MTRR_Val_Hi    dd 0
 
-Block_Size     dw 400h               ; default 16K blocks
-BlockSizeShR   db 10                 ; shr by 10 bits for 16K, 8 for 4K blocks
+block_size     dw 400h               ; default 16K blocks
+blk_size_shr   db 10                 ; shr by 10 bits for 16K, 8 for 4K blocks
 
 ;Fill_1         db '--------------'
 ;Fill_2         db '--------------'
 
-Comma_$        db ', ','$'
-Dash_Char_$    db '-$'
+comma_dollar   db ', ','$'
+dash_dollar    db '-$'
 
 ;AXstr          db 'AX:$'
 ;BXstr          db 'BX:$'
@@ -295,8 +290,8 @@ initOnly       db 0
 ; Strategy Routine, saves ES:BX (Parameter Block Address)
 ;==============================================================================
 Strategy_Routine:
-    mov   WORD PTR [Param_Addr],bx
-    mov   WORD PTR [Param_Addr + 2],es
+    mov   word ptr [Param_Addr],bx
+    mov   word ptr [Param_Addr + 2],es
     retf
 
 
@@ -320,8 +315,8 @@ endif
 ;    **** Apr/08/2004 Nagatoshi Uehara ****
 ; Saves Original SS:SP and Set a Local SS:SP
 ; -----------------------------------------------
-    mov   cs:WORD PTR [Saved_Stack],sp     ; Lo
-    mov   cs:WORD PTR [Saved_Stack][2],ss  ; Hi
+    mov   word ptr cs:[Saved_Stack],sp     ; Lo
+    mov   word ptr cs:[Saved_Stack][2],ss  ; Hi
     push  cs
     pop   ss
     mov   sp,OFFSET Local_Stack
@@ -350,8 +345,8 @@ IR_Other_Cmd:
 ;    **** Apr/08/2004 Nagatoshi Uehara ****
 ; Restores Original SS:SP
 ; -----------------------------------------------
-    mov   sp,cs:WORD PTR [Saved_Stack]     ; Lo
-    mov   ss,cs:WORD PTR [Saved_Stack][2]  ; Hi
+    mov   sp,word ptr cs:[Saved_Stack]     ; Lo
+    mov   ss,word ptr cs:[Saved_Stack][2]  ; Hi
 ;================================================
 
     retf
@@ -362,7 +357,7 @@ IR_Other_Cmd:
 ;==============================================================================
 Wait_Key:
     pusha                                  ; Saves all registers
-;    mov   dx,OFFSET PressKey$
+;    mov   dx,OFFSET press_key_msg
 ;    call  Print_String
     mov   ax,0
     int   16h
@@ -372,19 +367,19 @@ Wait_Key:
 
 Print_Dash_Char:
     pusha
-    mov   dx,OFFSET Dash_Char_$
+    mov   dx,OFFSET dash_dollar
     jmp   Do_Print_And_Restore_Registers
 
 
 Print_Comma:
     pusha
-    mov   dx,OFFSET Comma_$
+    mov   dx,OFFSET comma_dollar
     jmp   Do_Print_And_Restore_Registers
 
 
 Print_CRLF:
     pusha
-    mov   dx,OFFSET CR_LF_$
+    mov   dx,OFFSET CR_LF_dollar
 ;    jmp   Do_Print_And_Restore_Registers
 
 
@@ -400,7 +395,7 @@ Do_Print_And_Restore_Registers:
 ;==============================================================================
 Print_String:
     call  Do_Print_Str
-    mov   dx,OFFSET CR_LF_$                ; Finish printing
+    mov   dx,OFFSET CR_LF_dollar                ; Finish printing
 
 Do_Print_Str:
     mov   ah,09h
@@ -420,7 +415,7 @@ Print_Hex_Digit:
     shr   ax,cl                    ; Gets the nibble to show
     and   ax,000Fh                 ; Clears unwished nibbles
     mov   bx,ax
-    mov   dl,[Hex_Digits + bx]     ; Gets the hexadecimal character
+    mov   dl,[hex_digits + bx]     ; Gets the hexadecimal character
     mov   ah,02h                   ; "Display Output"
     int   21h
     pop   ax                       ; Restores the original 16-bit value showing
@@ -441,7 +436,7 @@ PrDigDW:
     shr   eax,cl
     and   eax,000Fh
     mov   ebx,eax
-    mov   dl,[Hex_Digits + bx]     ; ebx < FFFF, so bx is ok and avoids TASM to see a 32bit record
+    mov   dl,[hex_digits + bx]     ; ebx < FFFF, so bx is ok and avoids TASM to see a 32bit record
     mov   ah,02h                   ; "Display Output"
     int   21h
     pop   eax
@@ -463,7 +458,7 @@ Key_Out:
     cmp   word ptr [SkipUkcMsg],1             ; /S
     je    Release
 
-    mov   dx,OFFSET PressKey$                 ; Press any key... message
+    mov   dx,OFFSET press_key_msg             ; Press any key... message
     call  Print_String
     xor   ax,ax
     int   16h                                 ; Wait a key press
@@ -489,7 +484,7 @@ Pre_Init_Function:
     jnc   @PIF_PCI_BIOS_Found      ; Yes (Carry flag = 0)
 
 ;@PIF_No_PCI_BIOS:
-    mov   dx,OFFSET NoPCI$         ; No PCI message
+    mov   dx,OFFSET no_pci_msg     ; No PCI message
     stc                            ; Fail flag (Carry = 1)
     ret                            ; No PCI BIOS -> abort
 
@@ -516,13 +511,13 @@ Test_K7:
 
     ;kein Intel Chipsatz -> nach AMD K7 CPU suchen,
     ;dann haben wir eine BlockSize von 4, sonst 16KB
-    cmp   Skip_K7_Test,1           ; param /7
+    cmp   word ptr [skip_k7_test],1    ; param /7
     je    No_K7_CPU
     call  Test_K7_CPU
     jnc   No_K7_CPU
-    mov   K7_Found,1
-    mov   word ptr [Block_Size],100h
-    mov   byte ptr [BlockSizeShR],8
+    mov   word ptr [k7_found],1
+    mov   word ptr [block_size],100h
+    mov   byte ptr [blk_size_shr],8
 
 No_K7_CPU:
 
@@ -548,13 +543,13 @@ Check_HIMEM:
 Get_XMS_Call:
     mov   ax,4310h                 ; HIMEM: Entry address
     int   2Fh
-    mov   word ptr [XMS_Original_Jmp],bx
-    mov   word ptr [XMS_Original_Jmp + 2],es
+    mov   word ptr [xms_original_jmp],bx
+    mov   word ptr [xms_original_jmp + 2],es
 
     ; UMB server already exists?
     mov   ah,16
     mov   dx,0FFFh                 ; Request a 64-KByte block
-    call  [XMS_Original_Jmp]
+    call  [xms_original_jmp]
     cmp   bl,80h                   ; Not installed?
     je    Pre_Init_OK_Exit         ; -> OK
     mov   dx,OFFSET UMBPresent$    ;
@@ -581,7 +576,7 @@ Init_Function:
     push  cs
     pop   ds                       ; DS = code segment
 
-    mov   word ptr es:[bx + IR_EndAddress],OFFSET CR_LF_$
+    mov   word ptr es:[bx + IR_EndAddress],OFFSET CR_LF_dollar
     mov   word ptr es:[bx + IR_EndAddress + 2],cs  ; Store end address
     mov   dx,OFFSET Copyright$                     ; "Gruess Gott"
     call  Print_String
@@ -609,8 +604,8 @@ Elem_7:
     ;------ /7 - suppress K7 test ------
     cmp   al,'7'
     jne   Elem_7
-    mov   Skip_K7_Test,1                ; Must be set before PREINIT
-    mov   K7_Found,0
+    mov   word ptr [skip_k7_test],1                ; Must be set before PREINIT
+    mov   word ptr [k7_found],0
     mov   dx,OFFSET SkipK7Msg$
     call  Do_Print_Str
     ;------------------------------------
@@ -641,10 +636,10 @@ No_Param_Error:
     jmp   Error_Out
 
 
-s    dw 0
-;d1   db "Block Start$"
-;d2   db "Block Ende$"
-;d3   db "Back from Test$"
+block_start  dw 0
+;d1           db "Block Start$"
+;d2           db "Block Ende$"
+;d3           db "Back from Test$"
 
 
 ; Input: Start in AX, Return: Length in CX
@@ -662,7 +657,7 @@ Test_Block:
     ;call  Print_CRLF
     ;popa
 
-    mov   s,ax                     ; Save start
+    mov   [block_start],ax         ; Save start
     dec   ax                       ; Decrement once time for the first inc...
     mov   es,ax
 
@@ -670,10 +665,10 @@ Test_Block:
     mov   ax,es
     inc   ax
     mov   es,ax
-    mov   dx,WORD PTR es:[si]
-    and   dx,WORD PTR es:[si + 2]
-    and   dx,WORD PTR es:[si + 4]
-    and   dx,WORD PTR es:[si + 6]
+    mov   dx,word ptr es:[si]
+    and   dx,word ptr es:[si + 2]
+    and   dx,word ptr es:[si + 4]
+    and   dx,word ptr es:[si + 6]
     cmp   dx,0FFFFh
     je    @Next_Word
 
@@ -681,7 +676,7 @@ Test_Block:
     ;Difference found -> end of block
     mov   ax,es                    ; Current address
     push  bx
-    mov   bx,[Block_Size]
+    mov   bx,[block_size]
     xor   dx,dx                    ; clears DX before division
     div   bx
     mul   bx                       ; Round down to the nearest 4K or 16K boundary
@@ -689,10 +684,10 @@ Test_Block:
 
 ;    mov   cx,0
     xor   cx,cx
-    cmp   ax,s
+    cmp   ax,[block_start]
     je    @End_Test_Block          ; Exit with CX = 0
     mov   cx,ax
-    sub   cx,s                     ; Length = address - start
+    sub   cx,[block_start]         ; Length = address - start
 
 @End_Test_Block:
     pop   es
@@ -703,7 +698,7 @@ Test_Block:
 
 Test_Areas:
     ;AMD K7/K8 work without a chipset :-)
-    cmp   word ptr [K7_Found],1
+    cmp   word ptr [k7_found],1
     je    Test_All_UMB_Blocks
 
 
@@ -732,7 +727,7 @@ endif
     jz    Areas_Tested              ; Yes. Then done
     mov   es,ax                    ; Start address in ES
     lodsw                          ; Size (paragraphs)
-    mov   cl,BlockSizeShR          ; Convert to 16K/4K blocks
+    mov   cl,blk_size_shr          ; Convert to 16K/4K blocks
     shr   ax,cl                    ; => Number of 16K/4K blocks
 
 ifdef K7DebugVersion
@@ -743,11 +738,11 @@ ifdef K7DebugVersion
 endif
 
 Test_Blocks:
-    cmp   K7_Found,0
+    cmp   k7_found,0
     je    Skip_Set_K7
     xor   di,di
     call  Set_K7                   ; Segment ES, enable 16K
-    call  Init_RAM_4KB
+    call  Init_4KB_RAM_Block
     jmp   Test_Current_Block
 
 
@@ -777,7 +772,7 @@ Skip_PPro:
     dec   ax
     jz    Next_UMB                 ; -> Next UMB area
     mov   di,es
-    add   di,Block_Size            ; Otherwise, advance ES by 16K
+    add   di,block_size            ; Otherwise, advance ES by 16K
     mov   es,di
     jmp   Test_Blocks              ; And back to test the next 4K or 16K block
 
@@ -806,7 +801,7 @@ Chipset_Error:
 ; own "hook" into the HIMEM.SYS jump chain.
 ;------------------------------------------------------------------------------
 Areas_Tested:
-    cmp   initOnly,1
+    cmp   [initOnly],1
     jne   InstHimemExt
     mov   dx,OFFSET Initialized$   ; Initialized only
     call  Print_String
@@ -842,13 +837,13 @@ Areas_Tested:
 
 
 InstHimemExt:
-    les   di,[XMS_Original_Jmp]
+    les   di,[xms_original_jmp]
 
 Scan_Hooks:
-    mov   al,BYTE PTR es:[di]
+    mov   al,byte ptr es:[di]
     cmp   al,0EBh                    ; JMP SHORT?
     je    Hook_Found                 ; OK - momentanes Kettenende
-    les   di,DWORD PTR es:[di + 1]   ; sonst nÑchstes Element
+    les   di,Dword ptr es:[di + 1]   ; sonst nÑchstes Element
     cmp   al,0EAh                    ; war das Åberhaupt ein JMP FAR?
     je    Scan_Hooks
     mov   dx,OFFSET HookErr$         ; Hook-Kette beschÑdigt
@@ -857,12 +852,12 @@ Scan_Hooks:
 
 Hook_Found:
     cli                                          ; No interruptions here, please!
-    dec   BYTE PTR es:[di]                       ; JMP SHORT -> JMP FAR
-    mov   WORD PTR es:[di + 1],OFFSET New_Chain  ; Insert our own routine
-    mov   WORD PTR es:[di + 3],cs                ; Set segment
+    dec   byte ptr es:[di]                       ; JMP SHORT -> JMP FAR
+    mov   word ptr es:[di + 1],OFFSET New_Chain  ; Insert our own routine
+    mov   word ptr es:[di + 3],cs                ; Set segment
     add   di,5                                   ; Actual original address (after the NOPs)
-    mov   WORD PTR [XMS_Original_Jmp],di
-    mov   WORD PTR [XMS_Original_Jmp + 2],es
+    mov   word ptr [xms_original_jmp],di
+    mov   word ptr [xms_original_jmp + 2],es
     sti
 
 Show_Installation:
@@ -889,8 +884,10 @@ Scan_Areas:
 
 @@SA_Next_Block:
     call  Test_Block
-    cmp   cx,0
-    je    @@Skip_Range_Msg
+;    cmp   cx,0
+;    je    @@SA_Skip_Range_Msg
+    or    cx,cx                            ; CX = 0?
+    jz    @@SA_Skip_Range_Msg
     pusha
     mov   bx,ax
     add   bx,cx
@@ -908,19 +905,19 @@ Scan_Areas:
     call  Print_CRLF
     popa
 
-@@Skip_Range_Msg:
+@@SA_Skip_Range_Msg:
     cmp   cx,0                             ; Length zero?
-    jne   @@Add2List
-    add   ax,Block_Size
+    jne   @@SA_Add2List
+    add   ax,[block_size]
     cmp   ax,0F000h
     jb    @@SA_Next_Block
     jmp   List_Set_2                       ; That's it, exit
 
 
-@@Add2List:
+@@SA_Add2List:
 ;    call  Here_MSG
-    mov   WORD PTR[UMBs_List + bx],ax      ; Entry start address
-    mov   WORD PTR[UMBs_List + bx + 2],cx  ; Block length
+    mov   word ptr [UMBs_List + bx],ax      ; Entry start address
+    mov   word ptr [UMBs_List + bx + 2],cx  ; Block length
 
     add   ax,cx                            ; Continue searching beyond the
                                            ; end of the block
@@ -960,167 +957,11 @@ List_Set_2:
 ;    ret
 
 
-;include "MESSAGES.INC"
-ifdef EnglVersion
-  Copyright$       db 'UMBPCI c''t 11/95 - Siering/SchÑpers/Stiller$'
-  Changed$         db ''
-                   db VERSION_STRING, ' - Support for new Chipsets and CPUs - Uwe Sieber ', DATE_STRING,'$'
-  NoXMS$           db 'No XMS-driver found!$'
-  UMBPresent$      db 'UMB-server already installed!',13,10
-                   db 'Installation stopped!',13,10,'$'
-  NoFreeBlock$     db 'No unused memory block found',13,10,'$'
-  BadCmd$          db ''
-                   db 'Problem with range parameters in CONFIG.SYS!',13,10
-                   db 'Format: DEVICE=UMBPCI.SYS /I=aaaa-bbbb /I=cccc-dddd',13,10
-                   db 'Supported range is C800-EFFF',13,10
-                   db 'Only whole 16K-Blocks are allowed e.g. /I=c800-cbff or /I=c800-efff',13,10,'$'
-                   db 'On AMD K7/K8 4K-Blocks are allowed e.g. /I=c900-ccff or /I=c800-efff',13,10,'$'
-                   db 'Loaded without any parameters UMBPCI searches and uses all free ranges$'
-  RAMFail1$        db 13,10,'No RAM found at segment (hex) $'
-  RAMFail2$        db ' - Installation Stopped -$'
-  HookErr$         db 'Hook-Chain of HIMEM.SYS unknown!$'
-  Installed$       db 'Program installed.$'
-  NoPCI$           db 'UMBPCI creates UMBs on PCI chipsets (that''s where the name comes from).',13,10
-                   db 'This computer has no PCI chipset!$'
-  SetErr$          db 'Problem programming PCI-chipset!$'
-  SkipK7Msg$       db 'AMD K7 detection will be skipped!',13,10,'$' ; (Ninho)
-  PressKey$        db 'press any key...$'
-  Unsupp2$         db 'This chipset isn''t supported because its vendor doesn''t offer the needed information about it',13,10,'$'
-  Unsupp3$         db 'This chipset isn''t supported because it has no Shadow RAM',13,10,'$'
-  Unsupp4$         db 'The configuration mechanism of this chipset isn''t supported.',13,10,'$'
-  Unsupp5$         db 'This chipset isn''t supported because it doesn''t work as documented',13,10,'$'
-  Unsupp6$         db 'This chipset has no hostbridge as device 0 at bus 0',13,10,'$'
-  NoIntel$         db 'The chipset is unknown!',13,10
-;                   db 'Please check out at http://www.uwe-sieber.de/umbpci_e.html if this',13,10
-;                   db 'the latest version of UMBPCI. If it is, please email these data',13,10
-;                   db 'and the name of your chipset to mail@uwe-sieber.de:$'
-  Found_String$    db ' found.$'
-  Using_String$    db 'Using $'
-  iErr$            db 'Internal Error :-($'
-  Initialized$     db 'No loaded HIMEM found, Upper Memory activated only$'
-  Untested$        db ''
-                   db 'This chipset is untested! Mail me the name of the chipset and if it works',13,10
-                   db 'so I can either remove this break or list it as not working:',13,10
-                   db 'mail@uwe-sieber.de',13,10
-                   db 'Try a bit around with pure DOS (a good test is to load high DOSKEY) and backup ',13,10
-                   db 'your harddisk before you boot into Win9x GUI - I doensn''t warrenty anything!',13,10
-                   db 'Press ESC to skip UMBPCI or another key to proceed loading!',13,10,'$'
-  Canceled$        db 'Installation canceled!',13,10,'$'
-  SpaceE$          db '                '
-  InternalThanks   db '   Thanks to Uwe Milde (PPro Support), Sergei Shtylyov and Serg Svetlov (K7 support)   '
-  InternalThanks2  db '   Thanks to Nagatoshi Uehara for lots of very useful hints   '
-elseifdef PTBR
-  Copyright$       db 'UMBPCI c''t 11/95 - Siering/Sch‰pers/Stiller$'
-  Changed$         db ''
-                   db VERSION_STRING, ' - Suporte para Novos Chipsets e CPUs - Uwe Sieber ', DATE_STRING,13,10,'$'
-  NoXMS$           db 'Nenhum driver XMS encontrado!$'
-  UMBPresent$      db 'InstalaáÑo Interrompida!',13,10
-                   db 'Servidor UMB j† instalado.',13,10,'$'
-  NoFreeBlock$     db 'NÑo foi encontrado nenhum bloco de mem¢ria sem uso.',13,10,'$'
-  BadCmd$          db ''
-                   db 'Erro com os parÉmetros de faixa no arquivo CONFIG.SYS!',13,10
-                   db 'Sintaxe: DEVICE=UMBPCI.SYS /I=aaaa-bbbb /I=cccc-dddd',13,10
-                   db 'A faixa suportada Ç C800-EFFF.',13,10
-                   db 'Somente blocos inteiros de 16K sÑo permitidos, por exemplo: /I=C800-CBFF ou /I=C800-EFFF',13,10,'$'
-                   db 'Blocos de 4K sÑo permitidos nos AMD K7/K8, por exemplo: /I=C900-CCFF ou /I=C800-EFFF',13,10,'$'
-                   db 'Se o UMBPCI Ç chamado sem nenhum parÉmetro, ele busca e usa toda a faixa livre da mem¢ria superior.$'
-  RAMFail1$        db 'Nenhuma RAM dispon°vel no segmento (hex) $'
-  RAMFail2$        db '  ** InstalaáÑo Interrompida **$'
-  HookErr$         db 'Hook-Chain of HIMEM.SYS unknown!$'
-  Installed$       db 'UMBPCI instalado.',13,10,'$'
-  NoPCI$           db 'O UMBPCI cria UMBs em chipsets PCI (que Ç de onde origina o nome ;-).',13,10
-                   db 'Este computador nÑo tem um chipset PCI!$'
-  SetErr$          db 'Um erro ocorreu ao tentar programar o chipset PCI!$'
-  SkipK7Msg$       db 'A detecáÑo de AMD K7 ser† ignorada!',13,10,'$' ; (Ninho)
-  PressKey$        db 0Dh, 0Ah, 'Pressione uma tecla para continuar...', 0Dh, 0Ah, '$'
-  Unsupp2$         db 'This chipset isn''t supported because its vendor doesn''t offer the needed information about it',13,10,'$'
-  Unsupp3$         db 'This chipset isn''t supported because it has no Shadow RAM',13,10,'$'
-  Unsupp4$         db 'The configuration mechanism of this chipset isn''t supported.',13,10,'$'
-  Unsupp5$         db 'This chipset isn''t supported because it doesn''t work as documented',13,10,'$'
-  Unsupp6$         db 'This chipset has no hostbridge as device 0 at bus 0',13,10,'$'
-  NoIntel$         db 'Chipset Desconhecido!',13,10
-;                   db 'Por favor verifique em http://www.uwe-sieber.de/umbpci_e.html se esta Ç',13,10
-;                   db 'a mais £ltima versÑo do UMBPCI. Se ele est†, por favor envie estes dados',13,10
-;                   db 'e o nome do seu chipset para mail@uwe-sieber.de:$'
-  Found_String$    db ' encontrado.$'
-  Using_String$    db 'Segmentos dispon°veis: $'
-  iErr$            db 'Erro Interno :-($'
-  Initialized$     db 'HIMEM.SYS nÑo carregado. Somente Mem¢ria Superior ativada.$'
-  Untested$        db ''
-                   db 'Este Chipset NÑo Foi Testado! Mail me the name of the chipset and if it works',13,10
-                   db 'so I can either remove this break or list it as not working:',13,10
-                   db 'mail@uwe-sieber.de',13,10
-                   db 'Try a bit around with pure DOS (a good test is to load high DOSKEY) and backup ',13,10
-                   db 'your harddisk before you boot into Win9x GUI - I doensn''t warrenty anything!',13,10
-                   db 'Pressione ESC para pular o UMBPCI ou qualquer outra tecla para continuar carregando!',13,10,'$'
-  Canceled$        db 'InstalaáÑo Cancelada!',13,10,'$'
-  SpaceE$          db '                '
-  InternalThanks   db '   Obrigado a Uwe Milde (Suporte ao PPro), Sergei Shtylyov e Serg Svetlov (Suporte ao K7)   '
-  InternalThanks2  db '   Obrigado a Nagatoshi Uehara por v†rias dicas muito £teis   '
-else
-  Copyright$       db 'UMBPCI c''t 11/95 - Siering/SchÑpers/Stiller$'
-  Changed$         db ''
-                   db VERSION_STRING, ' - Support fÅr neue ChipsÑtze und CPUs - Uwe Sieber ', DATE_STRING,'$'
-  NoXMS$           db 'Kein XMS-Treiber vorhanden!$'
-  UMBPresent$      db 'UMB Server bereits installiert!',13,10
-                   db 'Installation abgebrochen!',13,10,'$'
-  NoFreeBlock$     db 'Keinen unbenutzen Speicher-Block gefunden',13,10,'$'
-  BadCmd$          db ''
-                   db 'Probleme mit den Bereichsangaben in CONFIG.SYS!',13,10
-                   db 'Format: DEVICE=UMBPCI.SYS /I=aaaa-bbbb /I=cccc-dddd',13,10
-                   db 'Nur der Bereich C800-EFFF wird unterstÅtzt',13,10
-                   db 'Nur ganze 16K-Blîcke sind erlaubt, z.B. /I=c800-cfff oder /I=c800-efff',13,10,'$'
-                   db 'Auf AMD K7/K8 sind 4K-Blîcke erlaubt, z.B. /I=c900-ceff oder /I=c800-efff',13,10,'$'
-                   db 'Ohne Parameter geladen, werden alle freien Bereiche gesucht und benutzt$'
-  RAMFail1$        db 13,10,'Kein RAM im Segment (hex) $'
-  RAMFail2$        db ' - Installation abgebrochen -$'
-  HookErr$         db 'Hook-Chain von HIMEM.SYS beschÑdigt bzw. unbekannt !$'
-  Installed$       db 'Programm installiert$'
-  NoPCI$           db 'UMBPCI erzeugt UMBs auf PCI-ChipsÑtzen (daher der Name...).',13,10
-                   db 'Dieser Computer hat keinen PCI-Chipsatz!$'
-  SetErr$          db 'Problem mit PCI-Chipsatz-Programmierung!$'
-  SkipK7Msg$       db 'AMD K7 Erkennung deaktiviert',13,10,'$';
-  PressKey$        db 'beliebige Taste drÅcken...$'
-  Unsupp2$         db 'Dieser Chipsatz wird wegen fehlendem Datenblatt nicht unterstÅtzt$'
-  Unsupp3$         db 'Dieser Chipsatz wird nicht unterstÅtzt, da er kein Shadow RAM besitzt$'
-  Unsupp4$         db 'Der Konfigurationsmechanismus dieses Chipsatzes wird nicht unterstÅtzt.$'
-  Unsupp5$         db 'Dieser Chipsatz wird nicht unterstÅtzt, da sein Shadow-RAM nicht',13,10
-                   db 'wie im Datenblatt beschrieben funktioniert.$'
-  Unsupp6$         db 'Dieser Chipsatz hat keine Hostbridge als device 0 auf bus 0',13,10,'$'
-  NoIntel$         db 'Der Chipsatz ist unbekannt!',13,10
-;                   db 'Bitte ÅberprÅfen Sie auf http://www.uwe-sieber.de/umbpci.html, ob',13,10
-;                   db 'es sich um die aktuelle Version von UMBPCI handelt. Falls ja, bitte',13,10
-;                   db 'folgende Daten an mail@uwe-sieber.de mailen:$'
-  Found_String$    db ' erkannt$'
-  Using_String$    db 'Benutze $'
-  iErr$            db 'Interner Fehler :-($'
-  Initialized$     db 'Kein geladenen HIMEM gefunden, UMB-Speicher nur aktiviert$'
-  Untested$        db ''
-                   db 'Dieser Chipsatz ist ungetestet. Bitte mailen Sie mir den Namen des Chipsatzes',13,10
-                   db 'und ob es funktioniert, damit ich ggf. diese Pause entfernen kann:',13,10
-                   db 'mail@uwe-sieber.de',13,10
-                   db 'Testen Sie erst, ob es im puren DOS funktioniert bevor Sie Win9x GUI hochfahren',13,10
-                   db '(das Hochladen von DOSKEY ist ein guter Test) und machen Sie vorher ein',13,10
-                   db 'Backup - ich garantiere fÅr nichts!',13,13,10
-                   db 'DrÅcken Sie "Esc" um abzubrechen oder eine andere Taste um fortzufahren!',13,10,'$'
-  Canceled$        db 'Installation abgebrochen!',13,10,'$'
-  Space$           db '                '
-  InternalThanks   db '   Dank an Uwe Milde (PPro Support), sowie Sergei Shtylyov und Serg Svetlov (K7-Support)   '
-  InternalThanks2  db '   Dank an Nagatoshi Uehara fÅr viele wertvolle Hinweise   '
-endif
+;------------------------------------------------------------------------------
+; Messages
+;------------------------------------------------------------------------------
+include "MESSAGES.INC"
 
-ifdef P2DebugVersion
-  lese             db 'lese    : $'
-  schreibe         db 'schreibe: $'
-endif
-
-ifdef DebugVersion2
-  Step1            db 'Step1',13,10,'$'
-  Step2            db 'Step2',13,10,'$'
-  Step3            db 'Step3',13,10,'$'
-  Step4            db 'Step4',13,10,'$'
-endif
-;----------------------------- END OF MESSAGES --------------------------------
 
 ; Called with ES:DI pointing into the command line
 ; Returns with DI+4, value or 0 in DX, and Z flag cleared/set
@@ -1175,9 +1016,9 @@ Set_List:
 Do_Elem:
     mov   al,es:[di]
     inc   di
-    cmp   al,13                    ; Is a Carriage Return?
+    cmp   al,CARRIAGE_RETURN       ; Is a Carriage Return?
     je    List_Set                 ; -> Yes. Then finish
-    cmp   al,10                    ; Is a Line Feed?
+    cmp   al,LINE_FEED             ; Is a Line Feed?
     je    List_Set                 ; -> Yes. Then finish
     cmp   al,'/'                   ; Is a Slash from "/I=..."?
     jne   Do_Elem
@@ -1219,11 +1060,11 @@ Do_Elem:
     call  Test_End_Address         ; Wert in dx auf Ende 16K-Block prÅfen
     jne   List_Error               ; Checks CMP DX,0 from Test_End_Address
     jg    List_Error
-    mov   WORD PTR [UMBs_List + bx],cx   ; Entry start address
+    mov   word ptr [UMBs_List + bx],cx   ; Entry start address
     mov   ax,dx
     sub   ax,cx                          ; Size in paragraphs
     inc   ax                             ; B000-B7FF is $800 paragraphs!
-    mov   WORD PTR [UMBs_List + bx + 2],ax
+    mov   word ptr [UMBs_List + bx + 2],ax
     add   bx,4
     cmp   bx,40                          ; More than 10 entries?
     jb    Do_Elem                        ; -> No, then continue
@@ -1249,7 +1090,7 @@ Test_Start_Address:
 ;    jb    @EndTestSA
     jb    @@TSA_End
 ;    mov   ax,dx
-;    mov   bx,Block_Size
+;    mov   bx,[block_size]
 ;    xor   dx,dx                    ; DX must be clear to divide
 ;    div   bx
 ;    cmp   dx,0
@@ -1269,7 +1110,7 @@ Test_End_Address:
 ;    add   dx,1
     inc   dx
 ;    mov   ax,dx
-;    mov   bx,Block_Size
+;    mov   bx,[block_size]
 ;    xor   dx,dx                    ; DX must be clear to divide
 ;    div   bx
 ;    cmp   dx,0
@@ -1284,7 +1125,7 @@ Test_End_Address:
 ; This Routine is Common to Test_Start_Address and Test_End_Address
 Test_Address_Common:
     mov   ax,dx
-    mov   bx,Block_Size
+    mov   bx,[block_size]
     xor   dx,dx                    ; DX must be clear to divide
     div   bx
     cmp   dx,0                     ; The flags will be tested by the 
@@ -1294,7 +1135,7 @@ Test_Address_Common:
 
 ;----------------------------- Strings for AMD K7 -----------------------------
 AMD_ID_String       db "AuthenticAMD"
-AMD_K7_Found$       db "AMD K7 CPU$"
+AMD_k7_found$       db "AMD K7 CPU$"
 AMD_K8_Found$       db "AMD K8 CPU$"
 
 ifdef EnglVersion
@@ -1311,14 +1152,14 @@ endif
 
 
 ; ----------------------------- ShowDevice-IDs --------------------------------
-Vendor$             db '  Vendor: ', 36
-Device$             db '  Device: ', 36
-North_Bridge$       db ' North-Bridge:', 36
-South_Bridge$       db ' South-Bridge:', 36
+vendor_str          db '  Vendor: ', 36
+device_str          db '  Device: ', 36
+north_bridge_str    db ' North-Bridge:', 36
+south_bridge_str    db ' South-Bridge:', 36
 
-Device              db 01h
+device              db 01h
 
-South_Bridge_Found  db 0           ; Flag for South Bridge found
+south_bridge_found  db 0           ; Flag for South Bridge found
 
 TestClass           dw 0601h, 0602h, 0000h, 0101h
 MaxDev              dw 0020h, 0020h, 0002h, 0020h
@@ -1347,9 +1188,9 @@ Print_Device_IDs:
 ;Show Vendor and Device
 ;------------------------------------------------------------------------------
 @PID_PCI_BIOS_OK:
-    mov   dx,OFFSET North_Bridge$
+    mov   dx,OFFSET north_bridge_str
     call  Do_Print_Str             ; Prints "North-Bridge:"
-    mov   dx,OFFSET Vendor$
+    mov   dx,OFFSET vendor_str
     call  Do_Print_Str             ; Prints "Vendor:"
 
     ;Print Vendor-ID Host-Bridge
@@ -1363,7 +1204,7 @@ Print_Device_IDs:
     call  Print_Hex_Value
      
     ;Print "Device:"
-    mov   dx,OFFSET Device$
+    mov   dx,OFFSET device_str
     call  Do_Print_Str             ; Prints "Device:"
 
     ;Print Device-ID Host-Bridge
@@ -1377,49 +1218,49 @@ Print_Device_IDs:
     call  Print_CRLF
 
     ;--------- Show South Bridge ---------
-    mov   dx,OFFSET South_Bridge$
+    mov   dx,OFFSET south_bridge_str
     call  Do_Print_Str             ; Prints "South-Bridge:"
-    mov   dx,OFFSET Vendor$
+    mov   dx,OFFSET vendor_str
     call  Do_Print_Str             ; Prints "Vendor:"
 
-    mov   Device,1
+    mov   byte ptr [device],1
 
 @South:
 ;    mov   di,0
     xor   di,di
-    mov   bl,Device                ; bei Dev=1 beginnen
+    mov   bl,[device]              ; bei Dev=1 beginnen
     shl   bl,3
     mov   bh,0
     mov   ax,0B109h
     int   1Ah
     cmp   cx,0FFFFh                ; FFFF heisst: Kein Device da
-    jne   @South_Bridge_Found
+    jne   @South_Found
 
 @Next_South:
-    inc   Device         ;aufwÑrts bis einschl.
-    mov   di,TCIdx
-    mov   dx, WORD PTR [MaxDev + di]
-    cmp   Device,dl
+    inc   byte ptr [device]        ;aufwÑrts bis einschl.
+    mov   di,[TCIdx]
+    mov   dx, word ptr [MaxDev + di]
+    cmp   [device],dl
     je    @Skip_South
     jmp   @South
 
 
-@South_Bridge_Found:
+@South_Found:
     ;Base und Sub-Class holen 
     mov   di,0Ah                   ; Reg.0A+0B = Class-Code
 ;    mov   bx,0                     ; Dev,Func,Bus=0
     mov   ax,0B109h
     int   1Ah
-    mov   di,TCIdx
-    mov   ax,WORD PTR [TestClass + di]
+    mov   di,[TCIdx]
+    mov   ax,word ptr [TestClass + di]
     cmp   cx,ax
-    je    @South_Bridge_Finally_Found
+    je    @South_Finally_Found
 
 ;    cmp   cx,0                    ; auf alten Chipsaetzen kann auch null geliefert werden...
     jmp   @Next_South
 
-@South_Bridge_Finally_Found:
-    mov   South_Bridge_Found,1
+@South_Finally_Found:
+    mov   byte ptr [south_bridge_found],1
     ;Vendor holen
 ;    mov   di,0                     ; Reg.0 = Vendor-ID
     xor   di,di                    ; Reg.0 = Vendor-ID
@@ -1441,15 +1282,15 @@ Print_Device_IDs:
     call  Print_Hex_Value
 
 @Skip_South:
-    cmp   South_Bridge_Found,1
+    cmp   byte ptr [south_bridge_found],1
     je    @South_End
-    cmp   TCIdx,6
+    cmp   word ptr [TCIdx],6
     je    @South_End
 
     ;nochmal von vorne
-    mov   Device,1
-    inc   TCIdx
-    inc   TCIdx
+    mov   byte ptr [device],1
+    inc   word ptr [TCIdx]
+    inc   word ptr [TCIdx]
     jmp   @South
 
 @South_End:
@@ -1543,7 +1384,7 @@ ifdef P2DebugVersion
     call  prKomma
     mov   eax,msrvalhi
     call  Print_Hex_Value
-    mov   dx,OFFSET CR_LF_$
+    mov   dx,OFFSET CR_LF_dollar
     call  Do_Print_Str
 ;lbl11:
     popa
@@ -3449,14 +3290,14 @@ Set_PCI:                           ; SI=>Liste, BX= BUSDEV
     mov   si,liste                 ; Register-Liste
 
 @Sloop:
-    mov   ax,WORD PTR [si]
+    mov   ax,word ptr [si]
     or    ax,ax
     stc
-    jz    @fertig                  ; Exit mit Carry
+    jz    SPCI_Exit                ; Exit with Carry = 1 (error)
     mov   dx,es
     cmp   dx,ax
     je    @Found
-    add   si,WORD PTR [si + 2]
+    add   si,word ptr [si + 2]
     jmp   @Sloop
 
 @Found:
@@ -3464,52 +3305,51 @@ Set_PCI:                           ; SI=>Liste, BX= BUSDEV
 
 ifdef DebugVersion
     call  Print_Hex_Value
-;    mov   dx,OFFSET Comma_$
+;    mov   dx,OFFSET comma_dollar
 ;    call  Do_Print_Str
 endif
 
-    cmp   Found_Chip,0484h         ; Master Enable nur fÅr SIO, bei PIIX ist 44h 
-    jne   @floop                   ; reserviert, bei PIIX3 IDE-Timing!
-    mov   di,44h                   ; Master Enable
-    mov   cl,17h                   ; PCIMaster: BIOS:Ro, 8000-A000:rw
+    cmp   word ptr [Found_Chip],0484h  ; Master Enable nur fÅr SIO, bei PIIX ist 44h
+    jne   @floop                       ; reserviert, bei PIIX3 IDE-Timing!
+    mov   di,44h                       ; Master Enable
+    mov   cl,17h                       ; PCIMaster: BIOS:Ro, 8000-A000:rw
     mov   bx,Bus_Dev_1
-    mov   ax,0B10Bh                ; write cfg
+    mov   ax,0B10Bh                    ; write cfg
     int   1Ah
 
 @floop:
     add   si,4
-    mov   ax,WORD PTR [si]         ; Register nach AX
+    mov   ax,word ptr [si]         ; Register nach AX
     or    ax,ax
-    jz    @fertig
-    mov   bx,Bus_Dev_0             ; Bus+DEV+Func of the first PCI device from the table
+    jz    SPCI_Exit
+    mov   bx,[Bus_Dev_0]           ; Bus+DEV+Func of the first PCI device from the table
     cmp   ah,1                     ; Kennung fÅr: use BusDev1
     jne   @Keep_Bus_Dev_0          ;
-    mov   bx,Bus_Dev_1             ; Bus+DEV+Func
+    mov   bx,[Bus_Dev_1]           ; Bus+DEV+Func
 
 @Keep_Bus_Dev_0:
     mov   ah,0                     ; remove "use BusDev1" flag from AX
     mov   di,ax                    ; Register nach DI
     mov   ax,0B108h                ; read cfg byte to CL
     int   1Ah
-    jc    @fertig
-    mov   al,BYTE PTR [si + 2]     ; Andmaske = Not Lobyte
+    jc    SPCI_Exit
+    mov   al,byte ptr [si + 2]     ; Andmaske = Not Lobyte
     not   al
     and   cl,al              
     
     ; jetzt sind die Bits, die in der Maske gesezt sind, auf Null
-    mov   al,BYTE PTR [si + 2]     ; Andmaske = Not Lobyte
-    mov   ah,BYTE PTR [si + 3]     ; Ormaske  = HiByte
+    mov   al,byte ptr [si + 2]     ; Andmaske = Not Lobyte
+    mov   ah,byte ptr [si + 3]     ; Ormaske  = HiByte
     and   ah,al                    ; nur die Bits der Maske werden berÅcksichtigt
     or    cl,ah
     mov   ax,0B10Bh                ; write cfg byte
     int   1Ah
     jnc   @floop
 
-@fertig:
-    ;clc
+SPCI_Exit:
 
 ifdef DebugVersion
-    mov   dx,OFFSET CR_LF_$
+    mov   dx,OFFSET CR_LF_dollar
     call  Do_Print_Str
 endif
 
@@ -3534,29 +3374,29 @@ Set_PPro:
     mov   si,OFFSET PProList       ; Register-Liste
 
 @ProSloop:
-    mov   ax,WORD PTR [si]         ; Segment-Wert
+    mov   ax,word ptr [si]         ; Segment-Wert
     or    ax,ax
     stc
     jz    @ProFertig               ; Exit with Carry
     mov   dx,es
     cmp   dx,ax
     je    @Pro_Found
-    add   si,WORD PTR [si + 2]     ; SI auf nÑchsten Segment-Wert
+    add   si,word ptr [si + 2]     ; SI auf nÑchsten Segment-Wert
     jmp   @ProSloop
 
 @Pro_Found:
     add   si,4                  ; SI auf Register
     xor   EAX, EAX
-    mov   ax,WORD PTR [si]      ; MTRRnum nach AX
+    mov   ax,word ptr [si]      ; MTRRnum nach AX
     mov   MTRR_Number,eax
 
     GetMSR MTRR_Number, MTRR_Val_Lo, MTRR_Val_Hi
 
     ;zwei DWord-Werte aus der Liste holen
     add   si,2
-    mov   eax, DWORD PTR [si]
+    mov   eax, Dword ptr [si]
     add   si,4
-    mov   edx, DWORD PTR [si]
+    mov   edx, Dword ptr [si]
 
     ;wenn EDX=FF dann mu· Lo durch neuen Wert ersetzt werden,
     ;sonst Hi
@@ -3591,7 +3431,7 @@ Set_PPro:
 
 mtrr              db 'mtrr : $'
 strseg            db 'seg  : $'
-Shift_Left_Count  db 0             ; Shift left counter variable
+shift_left_count  db 0             ; Shift left counter variable
 
 
 Set_K7:
@@ -3621,46 +3461,46 @@ K7_Open:
     mov   si,OFFSET K7_List        ; Register-Liste
 
 @K7Sloop:
-    mov   ax,WORD PTR [si]         ; Segment-Wert
+    mov   ax,word ptr [si]         ; Segment-Wert
     or    ax,ax
     stc
-    jz    @K7_Fertig               ; Exit with Carry
+    jz    SK7_Exit                 ; Exit with Carry
 
-    mov   byte ptr [Shift_Left_Count],0  ; SHR fuer den neuen MTRR-Wert (18h)
+    mov   byte ptr [shift_left_count],0  ; SHR fuer den neuen MTRR-Wert (18h)
     mov   dx,es                    ; die gesuchte Adresse (C800h oder sowas)
     cmp   ax,dx
-    je    @K7_Found
+    je    SK7_Found
     jg    @K7NextSegFound
-    add   si,WORD PTR [si+2]       ; SI auf nÑchsten Segment-Wert
+    add   si,word ptr [si+2]       ; SI auf nÑchsten Segment-Wert
     jmp   @K7Sloop
 
 
 @K7NextSegFound:
     ; das ist eine Adresse zwischen denen in der Liste, z.B. C900
     ; einen Schritt zurueck
-    sub   si,WORD PTR [si + 2]     ; SI auf vorhergehenden Segment-Wert
-    mov   ax,WORD PTR [si]         ; vorhergehenden Segment-Wert aus der Liste
+    sub   si,word ptr [si + 2]     ; SI auf vorhergehenden Segment-Wert
+    mov   ax,word ptr [si]         ; vorhergehenden Segment-Wert aus der Liste
 
 ; von hier aus 100h (4K) vorwÑrts bis =ES
 @K7SearchSegLoop:
-    add   byte ptr [Shift_Left_Count],8  ; weitere 8 Bit nach links
+    add   byte ptr [shift_left_count],8  ; weitere 8 Bit nach links
     add   ax,100h
     cmp   dx,ax
     jne   @K7SearchSegLoop
 
-@K7_Found:
+SK7_Found:
     ; ermittelt
 
 ifdef K7DebugVersion
     pusha
     call  Print_Hex_Value
-    mov   dx,OFFSET CR_LF_$
+    mov   dx,OFFSET CR_LF_dollar
     call  Do_Print_Str
     popa
 endif
 
     xor   eax,eax
-    mov   ax,WORD PTR [si + 4]     ; MTRRnum nach AX
+    mov   ax,word ptr [si + 4]     ; MTRRnum nach AX
     mov   [MTRR_Number],eax
 
     GetMSR MTRR_Number, MTRR_Val_Lo, MTRR_Val_Hi
@@ -3684,12 +3524,12 @@ ifdef K7DebugVersion
 endif
 
     ;die 1Eh um shlCount nach links
-    cmp   Shift_Left_Count,32
+    cmp   byte ptr [shift_left_count],32
     jge   @K7PrgHiWord
 
 
 @K7PrgLoWord:
-    mov   cl,[Shift_Left_Count]
+    mov   cl,[shift_left_count]
     mov   eax,1Eh
     shl   eax,cl
     mov   ebx,0FFh                 ; Mask
@@ -3701,7 +3541,7 @@ endif
     jmp   @EndChange
 
 @K7PrgHiWord:
-    mov   cl,[Shift_Left_Count]
+    mov   cl,[shift_left_count]
     sub   cl,32
     mov   eax,1Eh
     shl   eax,cl
@@ -3728,7 +3568,7 @@ ifdef K7DebugVersion
     call  PrStrich
     mov   eax,[MTRR_Val_Hi]
     call  PrHexDW
-    mov   dx,OFFSET CR_LF_$
+    mov   dx,OFFSET CR_LF_dollar
     call  Do_Print_Str
     popa
 endif
@@ -3736,7 +3576,7 @@ endif
     SetMSR MTRR_Number, MTRR_Val_Lo, MTRR_Val_Hi
     clc                            ; Alles OK
 
-@K7_Fertig:
+SK7_Exit:
     ; MTRR ein
     pushf
     mov   ebx,[MTRR_Def_Type]
@@ -3746,7 +3586,7 @@ endif
     ToggleCR0                      ; Cache Freeze
     popf
 
-K7_Close:
+;SK7_Close:
     mov   ecx,0C0010010h
     rdmsr
     and   eax,not 80000h
@@ -3789,10 +3629,10 @@ Next_ID:
     add   di,ID_LIST_LENGTH
 ;    mov   si,0
     xor   si,si
-    mov   dx, WORD PTR [di]        ; Get Vendor ID
+    mov   dx, word ptr [di]        ; Get Vendor ID
     cmp   dx,0                     ; End of list?
     je    @No_Supported_Chipset    ; Chipset not identified
-    mov   cx,WORD PTR [di + 2]     ; Get Device ID
+    mov   cx,word ptr [di + 2]     ; Get Device ID
 
 ifdef DebugVersion
     pusha
@@ -3827,7 +3667,7 @@ ifdef DebugVersion
 endif
 
 Search_Device_1:
-    mov   cx,WORD PTR [di + 4]
+    mov   cx,word ptr [di + 4]
     cmp   cx,0
     je    @Skip_Device_1
     mov   ax,0B102h                ; Find PCI device
@@ -3839,13 +3679,13 @@ Search_Device_1:
     mov   Found_Chip,cx
 
 @Skip_Device_1:
-    mov   ax,WORD PTR [di + 6]
+    mov   ax,word ptr [di + 6]
     mov   Liste,ax
 
-    mov   ax,WORD PTR [di + 8]
+    mov   ax,word ptr [di + 8]
     mov   PPro_Found,ax
 
-    mov   ax,WORD PTR [di + 10]
+    mov   ax,word ptr [di + 10]
     mov   Untested,ax
    
     push  dx
@@ -3961,11 +3801,11 @@ Test_K7_CPU:
 ;    mov   eax,0
     xor   eax,eax
     cpuid
-    cmp   DWORD PTR amd_id_string,ebx
+    cmp   Dword ptr amd_id_string,ebx
     jne   No_AMD_CPU
-    cmp   DWORD PTR amd_id_string[+4],edx
+    cmp   Dword ptr amd_id_string[+4],edx
     jne   No_AMD_CPU
-    cmp   DWORD PTR amd_id_string[+8],ecx
+    cmp   Dword ptr amd_id_string[+8],ecx
     jne   No_AMD_CPU
 
     ; eine AMD-CPU, jetzt die Model-Number testen
@@ -3990,7 +3830,7 @@ Test_K7_CPU:
 
 
 Write_K7:
-    mov   dx,OFFSET AMD_K7_Found$
+    mov   dx,OFFSET AMD_k7_found$
     call  Do_Print_Str
     mov   dx,OFFSET Found_String$  ; erkannt ausgeben
     call  Print_String
@@ -4033,57 +3873,87 @@ No_AMD_CPU:
 
 
 ;----------------------------------------------------------
-Set_Chipset:
+Set_Chipset PROC NEAR
     pusha
     call  Set_PCI
     jc    @Set_Error
 
 ;Speicher initialisieren, falls Board mit ParitÑt arbeitet
-;    mov   di,0                     ; ParitÑtsprÅfung abschalten
-    xor   di,di                    ; ParitÑtsprÅfung abschalten
-    mov   dx,61h
-    in    al,dx                    ; alte Einstellung merken
-    push  ax
-    or    al,0Ch
-    out   dx,al
-    cld                            ; vorwÑrts
-    mov   cx,1000h                 ; 16K Speicher mit 0 fÅllen (1000h x 4bytes = 16KB)
-;    mov   eax,0
-    xor   eax,eax
-    rep   stosd
-    in    al,dx                    ; Reset Pararity-Flipflop
-    pop   ax
-    out   dx,al                    ; wieder alte Einstellung
-    clc
+;    xor   di,di                    ; ParitÑtsprÅfung abschalten
+;    mov   dx,61h
+;    in    al,dx                    ; alte Einstellung merken
+;    push  ax
+;    or    al,0Ch
+;    out   dx,al
+;    cld                            ; vorwÑrts
+;    mov   cx,1000h                 ; 16K Speicher mit 0 fÅllen (1000h x 4bytes = 16KB)
+;    xor   eax,eax
+;    rep   stosd
+;    in    al,dx                    ; Reset Pararity-Flipflop
+;    pop   ax
+;    out   dx,al                    ; wieder alte Einstellung
+;    clc
+    mov   cx,1000h                  ; Fill 16K memory with zeroes
+                                    ; (1000h x 4bytes = 16KB)
+    call  Init_RAM_Block
 
 @Set_Error:
     popa
     ret
-;----------------------------- Set_Chipset END --------------------------------
+
+Set_Chipset ENDP
 
 
 ;----------------------------------------------------------
-Init_RAM_4KB:
+Init_4KB_RAM_Block PROC NEAR
     pusha
-;    mov   di,0                     ; disable parity check
-    xor   di,di                    ; disable parity check
-    mov   dx,61h
-    in    al,dx                    ; save old setting
-    push  ax
-    or    al,0Ch
-    out   dx,al
-    cld
+;    xor   di,di                    ; disable parity check
+;    mov   dx,61h
+;    in    al,dx                    ; save old setting
+;    push  ax
+;    or    al,0Ch
+;    out   dx,al
+;    cld
+;    mov   cx,400h                  ; fill 4K memory with 0 (400h x 4bytes = 4KB)
+;    xor   eax,eax
+;    rep   stosd
+;    in    al,dx                    ; reset parity flip-flop
+;    pop   ax
+;    out   dx,al                    ; restore old setting
+;    clc
     mov   cx,400h                  ; fill 4K memory with 0 (400h x 4bytes = 4KB)
-;    mov   eax,0
-    xor   eax,eax
-    rep   stosd
-    in    al,dx                    ; reset parity flip-flop
-    pop   ax
-    out   dx,al                    ; restore old setting
-    clc
+    call  Init_RAM_Block
     popa
     ret
-;---------------------------- Init_RAM_4KB END --------------------------------
+
+Init_4KB_RAM_Block ENDP
+
+
+;------------------------------------------------------------------------------
+; Initialize a Memory Block with Double Words and Parity Checking Disabled
+; ------------------------------------------------------------------------
+;
+; Input:
+;     ES = RAM block segment
+;     CX = Number of DWORDs to clear
+; Output:
+;     CF = 0 (no error)
+;------------------------------------------------------------------------------
+Init_RAM_Block:
+    mov   dx,61h
+    in    al,dx                    ; Gets actual parity setting
+    push  ax                       ; Saves it
+    or    al,0Ch                   ; Disable parity check
+    out   dx,al
+    cld                            ; Offset increments
+    xor   eax,eax                  ; Value to write
+    xor   di,di                    ; Initial offset (0)
+    rep   stosd
+    in    al,dx                    ; Reset parity flip-flop
+    pop   ax
+    out   dx,al                    ; Restores the original parity setting
+    clc                            ; No error (CF = 0)
+    ret
 
 
 END

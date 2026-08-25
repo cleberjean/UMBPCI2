@@ -234,6 +234,8 @@ TYP_06                        equ 0606h
 TYP_18                        equ 1818h
 MSR_CONTROL                   equ 02FFh
 
+CARRIAGE_RETURN               equ 0Dh
+LINE_FEED                     equ 0Ah
 ESC_KEY                       equ 1Bh
 
 
@@ -317,8 +319,8 @@ endif
 ;    **** Apr/08/2004 Nagatoshi Uehara ****
 ; Saves Original SS:SP and Set a Local SS:SP
 ; -----------------------------------------------
-    mov   cs:WORD PTR [Saved_Stack],sp     ; Lo
-    mov   cs:WORD PTR [Saved_Stack][2],ss  ; Hi
+    mov   WORD PTR cs:[Saved_Stack],sp     ; Lo
+    mov   WORD PTR cs:[Saved_Stack][2],ss  ; Hi
     push  cs
     pop   ss
     mov   sp,OFFSET Local_Stack
@@ -347,8 +349,8 @@ Other_Cmd:
 ;    **** Apr/08/2004 Nagatoshi Uehara ****
 ; Restores SS:SP
 ; -----------------------------------------------
-    mov   sp,cs:WORD PTR [Saved_Stack]     ; Lo
-    mov   ss,cs:WORD PTR [Saved_Stack][2]  ; Hi
+    mov   sp,WORD PTR cs:[Saved_Stack]     ; Lo
+    mov   ss,WORD PTR cs:[Saved_Stack][2]  ; Hi
 ;================================================
 
     retf
@@ -513,13 +515,13 @@ Test_K7:
 
     ;kein Intel Chipsatz -> nach AMD K7 CPU suchen,
     ;dann haben wir eine BlockSize von 4, sonst 16KB
-    cmp   Skip_K7_Test,1           ; param /7
+    cmp   [Skip_K7_Test],1         ; param /7
     je    No_K7_CPU
     call  Test_K7_CPU
     jnc   No_K7_CPU
     mov   K7_Found,1
-    mov   Block_Size,100h
-    mov   BlockSizeShR,8
+    mov   [Block_Size],100h
+    mov   [BlockSizeShR],8
 
 No_K7_CPU:
 
@@ -597,9 +599,9 @@ Init_Function PROC NEAR
 Elem_7:
     mov   al,es:[di]
     inc   di
-    cmp   al,13                         ; Carriage Return ?
+    cmp   al,CARRIAGE_RETURN            ; Carriage Return ?
     je    End_7                         ; -> yes, End
-    cmp   al,10                         ; Line Feed ?
+    cmp   al,LINE_FEED                  ; Line Feed ?
     je    End_7                         ; -> dito
     cmp   al,'/'                        ; Slash ?
     jne   Elem_7
@@ -608,8 +610,8 @@ Elem_7:
     ;------ /7 - suppress K7 test ------
     cmp   al,'7'
     jne   Elem_7
-    mov   Skip_K7_Test,1                ; Must be set before PREINIT
-    mov   K7_Found,0
+    mov   [Skip_K7_Test],1              ; Must be set before PREINIT
+    mov   [K7_Found],0
     mov   dx,OFFSET SkipK7Msg$
     call  Do_Print_Str
     ;------------------------------------
@@ -628,7 +630,7 @@ Cmd_Line:
     call  Set_List                      ; Parse the command line and set the list
     jnc   Test_Areas                    ; -> OK
 
-    cmp   Param_Error,1
+    cmp   [Param_Error],1
     jne   No_Param_Error
     mov   dx,OFFSET BadCmd$
     jmp   Error_Out                    ; Output the command line
@@ -640,10 +642,10 @@ No_Param_Error:
     jmp   Error_Out
 
 
-s    dw 0
-;d1   db "Block Start$"
-;d2   db "Block Ende$"
-;d3   db "Back from Test$"
+Block_Start  dw 0
+;d1           db "Block Start$"
+;d2           db "Block Ende$"
+;d3           db "Back from Test$"
 
 
 ; Input: Start in AX, Return: Length in CX
@@ -661,7 +663,7 @@ Test_Block:
     ;call  Print_CRLF
     ;popa
 
-    mov   s,ax                     ; Save start
+    mov   [Block_Start],ax         ; Save start
     dec   ax                       ; Decrement once time for the first inc...
     mov   es,ax
 
@@ -680,7 +682,7 @@ Test_Block:
     ;Difference found -> end of block
     mov   ax,es                    ; Current address
     push  bx
-    mov   bx,Block_Size
+    mov   bx,[Block_Size]
     xor   dx,dx                    ; clears DX before division
     div   bx
     mul   bx                       ; Round down to the nearest 4K or 16K boundary
@@ -688,10 +690,10 @@ Test_Block:
 
 ;    mov   cx,0
     xor   cx,cx
-    cmp   ax,s
+    cmp   ax,[Block_Start]
     je    @End_Test_Block          ; Exit with CX = 0
     mov   cx,ax
-    sub   cx,s                     ; Length = address - start
+    sub   cx,[Block_Start]         ; Length = address - start
 
 @End_Test_Block:
     pop   es
@@ -702,7 +704,7 @@ Test_Block:
 
 Test_Areas:
     ;AMD K7/K8 work without a chipset :-)
-    cmp   K7_Found,1
+    cmp   [K7_Found],1
     je    Test_All_UMB_Blocks
 
 
@@ -729,7 +731,7 @@ endif
 
     mov   es,ax                    ; Start address in ES
     lodsw                          ; Size (paragraphs)
-    mov   cl,BlockSizeShR          ; Convert to 16K/4K blocks
+    mov   cl,[BlockSizeShR]        ; Convert to 16K/4K blocks
     shr   ax,cl                    ; => Number of 16K/4K blocks
 
 ifdef K7DebugVersion
@@ -740,11 +742,11 @@ ifdef K7DebugVersion
 endif
 
 Test_Blocks:
-    cmp   K7_Found,0
+    cmp   [K7_Found],0
     je    Skip_Set_K7
     xor   di,di
     call  Set_K7                   ; Segment ES, enable 16K
-    call  Init_RAM_4KB
+    call  Init_4KB_RAM_Block
     jmp   Test_Current_Block
 
 
@@ -764,7 +766,7 @@ Test_Current_Block:
     cmp   es:[di],dx               ; Do we have a constant value?
     mov   es:[di],bx               ; Restore old contents
     jne   No_RAM                   ; -> No RAM at this location!
-    cmp   PPro_Found,0             ; PPro?
+    cmp   [PPro_Found],0           ; PPro?
     je    Skip_PPro
     pusha
     call  Set_PPro                 ; Segment ES, enable 16K
@@ -774,7 +776,7 @@ Skip_PPro:
     dec   ax
     jz    Next_UMB                 ; -> Next UMB area
     mov   di,es
-    add   di,Block_Size            ; Otherwise, advance ES by 16K
+    add   di,[Block_Size]          ; Otherwise, advance ES by 16K
     mov   es,di
     jmp   Test_Blocks              ; And back to test the next 4K or 16K block
 
@@ -803,7 +805,7 @@ Chipset_Error:
 ; own "hook" into the HIMEM.SYS jump chain.
 ;------------------------------------------------------------------------------
 Areas_Tested:
-    cmp   initOnly,1
+    cmp   [initOnly],1
     jne   InstHimemExt
     mov   dx,OFFSET Initialized$   ; Initialized only
     call  Print_String
@@ -883,20 +885,22 @@ Init_Function ENDP
 ; Search for Free Areas, Return with UMBs_List Filled and Carry Set or Cleared
 ;------------------------------------------------------------------------------
 Scan_Areas PROC NEAR
-    xor   bx,bx                            ; Initialize UMB_List index
-    mov   ax,0C000h                        ; First block
+    xor   bx,bx                             ; Initialize UMB_List index
+    mov   ax,0C000h                         ; First block
 
 @@SA_Next_Block:
     call  Test_Block
-    cmp   cx,0
-    je    @@Skip_Range_Msg
+;    cmp   cx,0
+;    je    @@SA_Skip_Range_Msg
+    or    cx,cx                             ; Length zero?
+    jz    @@SA_Skip_Range_Msg
     pusha
     mov   bx,ax
     add   bx,cx
     sub   bx,1
     push  bx
     push  ax
-    mov   dx,OFFSET Using_String$          ; Message
+    mov   dx,OFFSET Using_String$           ; Message
     call  Do_Print_Str
     pop   ax
     call  Print_Hex_Value
@@ -907,19 +911,21 @@ Scan_Areas PROC NEAR
     call  Print_CRLF
     popa
 
-@@Skip_Range_Msg:
-    cmp   cx,0                             ; Length zero?
-    jne   @@Add2List
-    add   ax,Block_Size
+@@SA_Skip_Range_Msg:
+;    cmp   cx,0                              ; Length zero?
+;    jne   @@SA_Add2List
+    or    cx,cx                             ; Length zero?
+    jnz   @@SA_Add2List
+    add   ax,[Block_Size]
     cmp   ax,0F000h
     jb    @@SA_Next_Block
-    jmp   List_Set_2                       ; That's it, exit
+    jmp   List_Set_2                        ; That's it, exit
 
 
-@@Add2List:
+@@SA_Add2List:
 ;    call  Here_MSG
-    mov   WORD PTR[UMBs_List + bx],ax      ; Entry start address
-    mov   WORD PTR[UMBs_List + bx + 2],cx  ; Block length
+    mov   WORD PTR [UMBs_List + bx],ax      ; Entry start address
+    mov   WORD PTR [UMBs_List + bx + 2],cx  ; Block length
 
     add   ax,cx                            ; Continue searching beyond the
                                            ; end of the block
@@ -1175,9 +1181,9 @@ Set_List PROC NEAR
 Do_Elem:
     mov   al,es:[di]
     inc   di
-    cmp   al,13                    ; Is a Carriage Return?
+    cmp   al,CARRIAGE_RETURN       ; Is a Carriage Return?
     je    List_Set                 ; -> Yes. Then finish
-    cmp   al,10                    ; Is a Line Feed?
+    cmp   al,LINE_FEED             ; Is a Line Feed?
     je    List_Set                 ; -> Yes. Then finish
     cmp   al,'/'                   ; Is a Slash from "/I=..."?
     jne   Do_Elem
@@ -1196,7 +1202,7 @@ Do_Elem:
     ;------ /S - skip unknown chipset break msg ------
     cmp   al,'S'
     jne   @No_S
-    mov   SkipUkcMsg,1
+    mov   [SkipUkcMsg],1
     jmp   Do_Elem
     ;-------------------------------------------------
 
@@ -1250,7 +1256,7 @@ Test_Start_Address PROC NEAR
 ;    jb    @EndTestSA
     jb    @@TSA_End
 ;    mov   ax,dx
-;    mov   bx,Block_Size
+;    mov   bx,[Block_Size]
 ;    xor   dx,dx                    ; DX must be clear to divide
 ;    div   bx
 ;    cmp   dx,0
@@ -1272,7 +1278,7 @@ Test_End_Address PROC NEAR
 ;    add   dx,1
     inc   dx
 ;    mov   ax,dx
-;    mov   bx,Block_Size
+;    mov   bx,[Block_Size]
 ;    xor   dx,dx                    ; DX must be clear to divide
 ;    div   bx
 ;    cmp   dx,0
@@ -1289,7 +1295,7 @@ Test_End_Address ENDP
 ; This Routine is Common to Test_Start_Address and Test_End_Address
 Test_Address_Common:
     mov   ax,dx
-    mov   bx,Block_Size
+    mov   bx,[Block_Size]
     xor   dx,dx                    ; DX must be clear to divide
     div   bx
     cmp   dx,0                     ; The flags will be tested by the 
@@ -1387,44 +1393,44 @@ Print_Device_IDs:
     mov   dx,OFFSET Vendor$
     call  Do_Print_Str             ; Prints "Vendor:"
 
-    mov   Device,1
+    mov   [Device],1
 
 @South:
 ;    mov   di,0
     xor   di,di
-    mov   bl,Device                ; bei Dev=1 beginnen
+    mov   bl,[Device]              ; bei Dev=1 beginnen
     shl   bl,3
     mov   bh,0
     mov   ax,0B109h
     int   1Ah
     cmp   cx,0FFFFh                ; FFFF heisst: Kein Device da
-    jne   @South_Bridge_Found
+    jne   @South_Found
 
 @Next_South:
-    inc   Device         ;aufwÑrts bis einschl.
-    mov   di,TCIdx
+    inc   [Device]                 ; aufwÑrts bis einschl.
+    mov   di,[TCIdx]
     mov   dx, WORD PTR [MaxDev + di]
-    cmp   Device,dl
+    cmp   [Device],dl
     je    @Skip_South
     jmp   @South
 
 
-@South_Bridge_Found:
-    ;Base und Sub-Class holen 
+@South_Found:
+    ;Base and Sub-Class holen 
     mov   di,0Ah                   ; Reg.0A+0B = Class-Code
 ;    mov   bx,0                     ; Dev,Func,Bus=0
     mov   ax,0B109h
     int   1Ah
-    mov   di,TCIdx
+    mov   di,[TCIdx]
     mov   ax,WORD PTR [TestClass + di]
     cmp   cx,ax
-    je    @South_Bridge_Finally_Found
+    je    @South_Finally_Found
 
 ;    cmp   cx,0                    ; auf alten Chipsaetzen kann auch null geliefert werden...
     jmp   @Next_South
 
-@South_Bridge_Finally_Found:
-    mov   South_Bridge_Found,1
+@South_Finally_Found:
+    mov   [South_Bridge_Found],1
     ;Vendor holen
 ;    mov   di,0                     ; Reg.0 = Vendor-ID
     xor   di,di                    ; Reg.0 = Vendor-ID
@@ -1437,7 +1443,7 @@ Print_Device_IDs:
     mov   dx,OFFSET Device$
     call  Do_Print_Str
     mov   di,2
-    mov   bl,Device                ; Bus stimmt noch von vorhin
+    mov   bl,[Device]              ; Bus stimmt noch von vorhin
     shl   bl,3
     mov   bh,0
     mov   ax,0B109h
@@ -1446,15 +1452,16 @@ Print_Device_IDs:
     call  Print_Hex_Value
 
 @Skip_South:
-    cmp   South_Bridge_Found,1
+    cmp   [South_Bridge_Found],1
     je    @South_End
-    cmp   TCIdx,6
+    cmp   [TCIdx],6
     je    @South_End
 
     ;nochmal von vorne
-    mov   Device,1
-    inc   TCIdx
-    inc   TCIdx
+    mov   [Device],1
+;    inc   [TCIdx]
+;    inc   [TCIdx]
+    add   WORD PTR [TCIdx],2
     jmp   @South
 
 @South_End:
@@ -3452,13 +3459,13 @@ K7_List:
 
 
 Set_PCI PROC NEAR                  ; SI=>Liste, BX= BUSDEV
-    mov   si,liste                 ; Register-Liste
+    mov   si,[Liste]               ; Register-Liste
 
 @Sloop:
     mov   ax,WORD PTR [si]
     or    ax,ax
     stc
-    jz    @fertig                  ; Exit mit Carry
+    jz    @Exit                    ; Exit with Carry = 1 (error)
     mov   dx,es
     cmp   dx,ax
     je    @Found
@@ -3474,11 +3481,11 @@ ifdef DebugVersion
 ;    call  Do_Print_Str
 endif
 
-    cmp   Found_Chip,0484h         ; Master Enable nur fÅr SIO, bei PIIX ist 44h 
+    cmp   [Found_Chip],0484h       ; Master Enable nur fÅr SIO, bei PIIX ist 44h 
     jne   @floop                   ; reserviert, bei PIIX3 IDE-Timing!
     mov   di,44h                   ; Master Enable
     mov   cl,17h                   ; PCIMaster: BIOS:Ro, 8000-A000:rw
-    mov   bx,Bus_Dev_1
+    mov   bx,[Bus_Dev_1]
     mov   ax,0B10Bh                ; write cfg
     int   1Ah
 
@@ -3486,7 +3493,7 @@ endif
     add   si,4
     mov   ax,WORD PTR [si]         ; Register nach AX
     or    ax,ax
-    jz    @fertig
+    jz    @Exit
     mov   bx,Bus_Dev_0             ; Bus+DEV+Func of the first PCI device from the table
     cmp   ah,1                     ; Kennung fÅr: use BusDev1
     jne   @Keep_Bus_Dev_0          ;
@@ -3497,7 +3504,7 @@ endif
     mov   di,ax                    ; Register nach DI
     mov   ax,0B108h                ; read cfg byte to CL
     int   1Ah
-    jc    @fertig
+    jc    @Exit
     mov   al,BYTE PTR [si + 2]     ; Andmaske = Not Lobyte
     not   al
     and   cl,al              
@@ -3511,8 +3518,7 @@ endif
     int   1Ah
     jnc   @floop
 
-@fertig:
-    ;clc
+@Exit:
 
 ifdef DebugVersion
     mov   dx,OFFSET CR_LF_$
@@ -3633,7 +3639,7 @@ K7_Open:
     mov   ax,WORD PTR [si]         ; Segment-Wert
     or    ax,ax
     stc
-    jz    @K7_Fertig               ; Exit with Carry
+    jz    @K7_Exit                 ; Exit with Carry = 1 (error)
 
     mov   Shift_Left_Count,0       ; SHR fuer den neuen MTRR-Wert (18h)
     mov   dx,es                    ; die gesuchte Adresse (C800h oder sowas)
@@ -3652,7 +3658,7 @@ K7_Open:
 
 ; von hier aus 100h (4K) vorwÑrts bis =ES
 @K7SearchSegLoop:
-    add   Shift_Left_Count,8       ; weitere 8 Bit nach links
+    add   [Shift_Left_Count],8     ; weitere 8 Bit nach links
     add   ax,100h
     cmp   dx,ax
     jne   @K7SearchSegLoop
@@ -3710,7 +3716,7 @@ endif
     jmp   @EndChange
 
 @K7PrgHiWord:
-    mov   cl,Shift_Left_Count
+    mov   cl,[Shift_Left_Count]
     sub   cl,32
     mov   eax,1Eh
     shl   eax,cl
@@ -3745,7 +3751,7 @@ endif
     SetMSR MTRR_Number, MTRR_Val_Lo, MTRR_Val_Hi
     clc                            ; Alles OK
 
-@K7_Fertig:
+@K7_Exit:
     ; MTRR ein
     pushf
     mov   ebx,MTRR_Def_Type
@@ -3780,14 +3786,14 @@ Init_Chipset PROC NEAR
     xor   bx,bx                    ; Dev,Func,Bus=0
     mov   ax,0B109h                ; Read word
     int   1Ah
-    mov   Found_Vendor_ID,cx
+    mov   [Found_Vendor_ID],cx
 
     ;Get Device-ID Host-Bridge
     mov   di,02h                   ; Reg.2 = Device-ID
     mov   bx,00h                   ; Dev,Func,Bus=0
     mov   ax,0B109h                ; Read word
     int   1Ah
-    mov   Found_Device_ID,cx
+    mov   [Found_Device_ID],cx
 
 ;------------------------------------------------------------------------------
 ; Scan the Chipset List
@@ -3824,8 +3830,8 @@ Search_Device_0:
     mov   ax,0B102h                ; Find PCI device
     int   1Ah
     jc    Next_ID
-    mov   Bus_Dev_0,bx
-    mov   Found_Chip,cx
+    mov   [Bus_Dev_0],bx
+    mov   [Found_Chip],cx
 
 ifdef DebugVersion
     pusha
@@ -3845,18 +3851,18 @@ Search_Device_1:
 
     ;jc    @NoSupportedChipset
     jc    Next_ID
-    mov   Bus_Dev_1,bx
-    mov   Found_Chip,cx
+    mov   [Bus_Dev_1],bx
+    mov   [Found_Chip],cx
 
 @Skip_Device_1:
     mov   ax,WORD PTR [di + 6]
-    mov   Liste,ax
+    mov   [Liste],ax
 
     mov   ax,WORD PTR [di + 8]
-    mov   PPro_Found,ax
+    mov   [PPro_Found],ax
 
     mov   ax,WORD PTR [di + 10]
-    mov   Untested,ax
+    mov   [Untested],ax
    
     push  dx
 
@@ -3870,25 +3876,25 @@ Search_Device_1:
 ;    pop dx
 ;    pushf
 
-    cmp   Untested,0
+    cmp   [Untested],0
     je    @Is_Tested
 
-    cmp   Untested,UNSUPPORTED_UNTESTED            ;1
+    cmp   [Untested],UNSUPPORTED_UNTESTED            ; 1
     je    @UnTested
 
-    cmp   Untested, UNSUPPORTED_NO_DATASHEET       ;2
+    cmp   [Untested], UNSUPPORTED_NO_DATASHEET       ; 2
     je    @UnSupp2
 
-    cmp   Untested, UNSUPPORTED_NO_SHADOW_RAM      ;3
+    cmp   [Untested], UNSUPPORTED_NO_SHADOW_RAM      ; 3
     je    @UnSupp3
 
-    cmp   Untested, UNSUPPORTED_CONFIG_MECHANISM   ;4
+    cmp   [Untested], UNSUPPORTED_CONFIG_MECHANISM   ; 4
     je    @UnSupp4
 
-    cmp   Untested,UNSUPPORTED_WRONG_DOC           ;5
+    cmp   [Untested], UNSUPPORTED_WRONG_DOC          ; 5
     je    @UnSupp5
 
-    cmp   Untested,UNSUPPORTED_NO_HOST_BRIDGE      ;6
+    cmp   [Untested], UNSUPPORTED_NO_HOST_BRIDGE     ; 6
     je    @UnSupp6
     
     jmp   @Init_Cancel
@@ -4052,22 +4058,23 @@ Set_Chipset PROC NEAR
     jc    @Set_Error
 
 ;Speicher initialisieren, falls Board mit ParitÑt arbeitet
-;    mov   di,0                     ; ParitÑtsprÅfung abschalten
-    xor   di,di                    ; ParitÑtsprÅfung abschalten
-    mov   dx,61h
-    in    al,dx                    ; alte Einstellung merken
-    push  ax
-    or    al,0Ch
-    out   dx,al
-    cld                            ; vorwÑrts
-    mov   cx,1000h                 ; 16K Speicher mit 0 fÅllen (1000h x 4bytes = 16KB)
-;    mov   eax,0
-    xor   eax,eax
-    rep   stosd
-    in    al,dx                    ; Reset Pararity-Flipflop
-    pop   ax
-    out   dx,al                    ; wieder alte Einstellung
-    clc
+;    xor   di,di                    ; ParitÑtsprÅfung abschalten
+;    mov   dx,61h
+;    in    al,dx                    ; alte Einstellung merken
+;    push  ax
+;    or    al,0Ch
+;    out   dx,al
+;    cld                            ; vorwÑrts
+;    mov   cx,1000h                 ; 16K Speicher mit 0 fÅllen (1000h x 4bytes = 16KB)
+;    xor   eax,eax
+;    rep   stosd
+;    in    al,dx                    ; Reset Pararity-Flipflop
+;    pop   ax
+;    out   dx,al                    ; wieder alte Einstellung
+;    clc
+    mov   cx,1000h                  ; Fill 16K memory with zeroes
+                                    ; (1000h x 4bytes = 16KB)
+    call  Init_RAM_Block
 
 @Set_Error:
     popa
@@ -4077,28 +4084,55 @@ Set_Chipset ENDP
 
 
 ;----------------------------------------------------------
-Init_RAM_4KB PROC NEAR
+Init_4KB_RAM_Block PROC NEAR
     pusha
-;    mov   di,0                     ; disable parity check
-    xor   di,di                    ; disable parity check
-    mov   dx,61h
-    in    al,dx                    ; save old setting
-    push  ax
-    or    al,0Ch
-    out   dx,al
-    cld
+;    xor   di,di                    ; disable parity check
+;    mov   dx,61h
+;    in    al,dx                    ; save old setting
+;    push  ax
+;    or    al,0Ch
+;    out   dx,al
+;    cld
+;    mov   cx,400h                  ; fill 4K memory with 0 (400h x 4bytes = 4KB)
+;    xor   eax,eax
+;    rep   stosd
+;    in    al,dx                    ; reset parity flip-flop
+;    pop   ax
+;    out   dx,al                    ; restore old setting
+;    clc
     mov   cx,400h                  ; fill 4K memory with 0 (400h x 4bytes = 4KB)
-;    mov   eax,0
-    xor   eax,eax
-    rep   stosd
-    in    al,dx                    ; reset parity flip-flop
-    pop   ax
-    out   dx,al                    ; restore old setting
-    clc
+    call  Init_RAM_Block
     popa
     ret
 
-Init_RAM_4KB ENDP
+Init_4KB_RAM_Block ENDP
+
+
+;------------------------------------------------------------------------------
+; Initialize a Memory Block with Double Words and Parity Checking Disabled
+; ------------------------------------------------------------------------
+;
+; Input:
+;     ES = RAM block segment
+;     CX = Number of DWORDs to clear
+; Output:
+;     CF = 0 (no error)
+;------------------------------------------------------------------------------
+Init_RAM_Block:
+    mov   dx,61h
+    in    al,dx                    ; Gets actual parity setting
+    push  ax                       ; Saves it
+    or    al,0Ch                   ; Disable parity check
+    out   dx,al
+    cld                            ; Offset increments
+    xor   eax,eax                  ; Value to write
+    xor   di,di                    ; Initial offset (0)
+    rep   stosd
+    in    al,dx                    ; Reset parity flip-flop
+    pop   ax
+    out   dx,al                    ; Restores the original parity setting
+    clc                            ; No error (CF = 0)
+    ret
 
 
 END
