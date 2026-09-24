@@ -3292,9 +3292,9 @@ ID_List:
 ;------------------------------------- END ------------------------------------
 
 
-;============================ CHIPSETS CONFIG DATA ============================
+;============================= CHIPSETS PAM DATA =============================
 
-;----------------- Defines for Chipsets Data Configuration List ---------------
+;-------------- Defines for Chipsets PAM Data Configuration List --------------
 RWC_LO     equ 00F0Fh              ; Mask
 RWC_HI     equ 0F0F0h              ; Value
 
@@ -3330,7 +3330,7 @@ No_List:
     dw 00000h
 
 
-; Dummy List for K7 and K8
+; Dummy List for K7 and K8 Processors
 Empty_List:
     dw 0C000h, 0Ah, 0h, 0, 0
     dw 0C400h, 0Ah, 0h, 0, 0
@@ -3993,7 +3993,7 @@ K7_List:
     dw 00000h                      ; End of list marker
 ;------------------------------------------------------------------------------
 
-;========================= END OF CHIPSETS CONFIG DATA ========================
+;========================== END OF CHIPSETS PAM DATA ==========================
 
 
 ; ================================== MESSAGES =================================
