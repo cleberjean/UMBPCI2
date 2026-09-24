@@ -11,7 +11,7 @@ echo UMBPCI2.SYS created.
 goto End
 
 Error:
-echo An Error Ocurred! UMBPCI.SYS not created.
+echo An Error Ocurred! UMBPCI2.SYS not created.
 
 :End
 echo.
