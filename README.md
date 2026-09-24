@@ -1,5 +1,7 @@
 # UMBPCI2
 Fork from Original Uwe Sieber Code.
 
-Trying rewrite to more clarity.
+Excuse me Sieber, but trying rewrite to more clarity.
+
+For any issues contact-me.
 
